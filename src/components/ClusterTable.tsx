@@ -1,4 +1,4 @@
-import type { Cluster, ClusterStatus, MetricMode } from "./types"
+import type { Cluster, ClusterStatus, MetricMode } from "../types"
 import { t, fg, bold } from "@opentui/core"
 
 type SortOrder = "none" | "asc" | "desc"

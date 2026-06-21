@@ -1,17 +1,25 @@
 import { useCallback, useEffect, useRef, useState } from "react"
-import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/react"
-import { t, fg } from "@opentui/core"
+import { useRenderer } from "@opentui/react"
 import type { CliRenderer } from "@opentui/core"
-import { ClusterTable } from "./ClusterTable"
-import { ClusterOverview } from "./ClusterOverview"
-import { NodeTable } from "./NodeTable"
-import { NodeBars, PodTable } from "./NodeDetail"
-import { PodSectionList, PodSectionDetail, buildSections, getDetailValue, getDetailRowCount } from "./PodDetailView"
-import { loadContextsAsync, getCurrentContext, switchContext, fetchClusterStatusAsync, fetchNodeDetailsAsync, fetchPodsForNodeAsync, fetchPodDetailAsync } from "./kube"
-import { copyToClipboard } from "./clipboard"
+import { HeaderBar, buildBreadcrumbParts } from "./components/HeaderBar"
+import { CommandsBar } from "./components/CommandsBar"
+import { ClusterListPage } from "./pages/ClusterListPage"
+import { ClusterDetailPage } from "./pages/ClusterDetailPage"
+import { NodeDetailPage } from "./pages/NodeDetailPage"
+import { PodDetailPage } from "./pages/PodDetailPage"
+import type { PodDetailMode } from "./pages/PodDetailPage"
+import {
+  loadContextsAsync,
+  getCurrentContext,
+  switchContext,
+  fetchClusterStatusAsync,
+  fetchNodeDetailsAsync,
+  fetchPodsForNodeAsync,
+  fetchPodDetailAsync,
+} from "./kube"
 import type { Cluster, KubeContext, MetricMode, NodeDetail, PodDetail, PodDetailFull } from "./types"
 
-type SortOrder = "none" | "asc" | "desc"
+type Page = "cluster-list" | "cluster-detail" | "node-detail" | "pod-detail"
 
 const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
 
@@ -24,95 +32,37 @@ function formatTime(date: Date): string {
   return `${h12}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")} ${ampm}`
 }
 
-function cycleSort(current: SortOrder): SortOrder {
-  if (current === "none") return "asc"
-  if (current === "asc") return "desc"
-  return "none"
-}
-
-function computeDisplay(
-  clusters: Cluster[],
-  searchQuery: string,
-  favorites: Set<string>,
-  sortOrder: SortOrder,
-): Cluster[] {
-  const q = searchQuery.toLowerCase()
-  const filtered = q ? clusters.filter((c) => c.name.toLowerCase().includes(q)) : [...clusters]
-
-  const favs = filtered.filter((c) => favorites.has(c.name))
-  const rest = filtered.filter((c) => !favorites.has(c.name))
-
-  const sortFn = (a: Cluster, b: Cluster): number => {
-    if (sortOrder === "asc") return a.name.localeCompare(b.name)
-    if (sortOrder === "desc") return b.name.localeCompare(a.name)
-    return 0
-  }
-
-  favs.sort(sortFn)
-  rest.sort(sortFn)
-
-  return [...favs, ...rest]
-}
-
 interface AppProps {
   renderer: CliRenderer
 }
 
 export function App({ renderer }: AppProps) {
   const [clusters, setClusters] = useState<Cluster[]>([])
-  const [selectedIndex, setSelectedIndex] = useState(0)
   const [clock, setClock] = useState(formatTime(new Date()))
-  const [sortOrder, setSortOrder] = useState<SortOrder>("none")
-  const [searchMode, setSearchMode] = useState(false)
-  const [searchQuery, setSearchQuery] = useState("")
-  const [favorites, setFavorites] = useState<Set<string>>(new Set())
 
   const [contexts, setContexts] = useState<KubeContext[]>([])
   const [currentContext, setCurrentContext] = useState("")
-  const [contextModalOpen, setContextModalOpen] = useState(false)
-  const [contextSelectIndex, setContextSelectIndex] = useState(0)
-  const [contextSearch, setContextSearch] = useState("")
-  const [contextSearchCursor, setContextSearchCursor] = useState(0)
 
   const [loading, setLoading] = useState(true)
   const [spinnerFrame, setSpinnerFrame] = useState(0)
 
-  const [detailView, setDetailView] = useState(false)
+  const [page, setPage] = useState<Page>("cluster-list")
+  const [selectedCluster, setSelectedCluster] = useState<Cluster | null>(null)
   const [nodeDetails, setNodeDetails] = useState<NodeDetail[]>([])
-  const [nodeListIndex, setNodeListIndex] = useState(0)
-  const [nodeScrollOffset, setNodeScrollOffset] = useState(0)
+  const [detailLoading, setDetailLoading] = useState(false)
 
-  const [nodeView, setNodeView] = useState(false)
   const [selectedNode, setSelectedNode] = useState<NodeDetail | null>(null)
   const [pods, setPods] = useState<PodDetail[]>([])
-  const [podScrollOffset, setPodScrollOffset] = useState(0)
-  const [podListIndex, setPodListIndex] = useState(0)
-  const [detailLoading, setDetailLoading] = useState(false)
   const [nodeLoading, setNodeLoading] = useState(false)
   const [metricMode, setMetricMode] = useState<MetricMode>("pct")
 
-  const [podView, setPodView] = useState(false)
   const [selectedPod, setSelectedPod] = useState<PodDetail | null>(null)
   const [podDetailFull, setPodDetailFull] = useState<PodDetailFull | null>(null)
   const [podDetailLoading, setPodDetailLoading] = useState(false)
-  const [podSectionIndex, setPodSectionIndex] = useState(0)
-  const [podDetailScrollOffset, setPodDetailScrollOffset] = useState(0)
-  const [podDetailMode, setPodDetailMode] = useState<"sections" | "details">("sections")
-  const [detailRowIndex, setDetailRowIndex] = useState(0)
-  const [toastMessage, setToastMessage] = useState("")
-  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [podDetailMode, setPodDetailMode] = useState<PodDetailMode>("sections")
 
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const spinnerRef = useRef<ReturnType<typeof setInterval> | null>(null)
-
-  const { width: termWidth, height: termHeight } = useTerminalDimensions()
-
-  const filteredContexts = contexts.filter((c) =>
-    c.name.toLowerCase().includes(contextSearch.toLowerCase()),
-  )
-
-  const displayed = computeDisplay(clusters, searchQuery, favorites, sortOrder)
-  const selectedCluster = displayed[selectedIndex]
 
   const spinner = SPINNER_FRAMES[spinnerFrame % SPINNER_FRAMES.length] ?? "⠋"
 
@@ -142,22 +92,14 @@ export function App({ renderer }: AppProps) {
 
   const doContextSwitch = useCallback(async (ctxName: string) => {
     setLoading(true)
-    setDetailView(false)
-    setNodeView(false)
-    setPodView(false)
+    setPage("cluster-list")
+    setSelectedCluster(null)
     setNodeDetails([])
     setSelectedNode(null)
     setPods([])
-    setPodListIndex(0)
-    setNodeScrollOffset(0)
-    setPodScrollOffset(0)
     setSelectedPod(null)
     setPodDetailFull(null)
-    setPodSectionIndex(0)
-    setPodDetailScrollOffset(0)
     setPodDetailMode("sections")
-    setDetailRowIndex(0)
-    setToastMessage("")
     switchContext(ctxName)
     setCurrentContext(ctxName)
     const data = await fetchClusterStatusAsync(ctxName)
@@ -176,8 +118,6 @@ export function App({ renderer }: AppProps) {
       if (cur) {
         const data = await fetchClusterStatusAsync(cur)
         setClusters([data])
-        const idx = ctxs.findIndex((c) => c.name === cur)
-        setContextSelectIndex(idx >= 0 ? idx : 0)
       }
       setLoading(false)
     })()
@@ -208,667 +148,134 @@ export function App({ renderer }: AppProps) {
     }
   }, [renderer])
 
-  useEffect(() => {
-    setSelectedIndex(0)
-  }, [searchQuery, sortOrder])
+  const handleOpenCluster = useCallback((cluster: Cluster) => {
+    setSelectedCluster(cluster)
+    setNodeDetails([])
+    setDetailLoading(true)
+    setPage("cluster-detail")
+    fetchNodeDetailsAsync(currentContext).then((nodes) => {
+      setNodeDetails(nodes)
+      setDetailLoading(false)
+    })
+  }, [currentContext])
 
-  const maxNodeRows = Math.max(1, termHeight - 20)
+  const handleOpenNode = useCallback((node: NodeDetail) => {
+    setSelectedNode(node)
+    setPods([])
+    setNodeLoading(true)
+    setPage("node-detail")
+    fetchPodsForNodeAsync(currentContext, node.name).then((podsList) => {
+      setPods(podsList)
+      setNodeLoading(false)
+    })
+  }, [currentContext])
 
-  const handleKey = useCallback(
-    (key: { name: string; ctrl?: boolean; sequence?: string }) => {
-      if (contextModalOpen) {
-        if (key.name === "escape") {
-          setContextModalOpen(false)
-          setContextSearch("")
-          setContextSearchCursor(0)
-        } else if (key.name === "up") {
-          setContextSelectIndex((i: number) => Math.max(0, i - 1))
-        } else if (key.name === "down") {
-          setContextSelectIndex((i: number) =>
-            Math.min(filteredContexts.length - 1, i + 1),
-          )
-        } else if (key.name === "return") {
-          if (filteredContexts.length > 0) {
-            const chosen = filteredContexts[contextSelectIndex]
-            if (chosen && chosen.name !== currentContext) {
-              setContextModalOpen(false)
-              setContextSearch("")
-              setContextSearchCursor(0)
-              doContextSwitch(chosen.name)
-            } else {
-              setContextModalOpen(false)
-              setContextSearch("")
-              setContextSearchCursor(0)
-            }
-          }
-        } else if (key.name === "left") {
-          setContextSearchCursor((c: number) => Math.max(0, c - 1))
-        } else if (key.name === "right") {
-          setContextSearchCursor((c: number) =>
-            Math.min(contextSearch.length, c + 1),
-          )
-        } else if (key.name === "home") {
-          setContextSearchCursor(0)
-        } else if (key.name === "end") {
-          setContextSearchCursor(contextSearch.length)
-        } else if (key.name === "backspace") {
-          if (contextSearchCursor > 0) {
-            const before = contextSearch.slice(0, contextSearchCursor - 1)
-            const after = contextSearch.slice(contextSearchCursor)
-            setContextSearch(before + after)
-            setContextSearchCursor((c: number) => c - 1)
-            setContextSelectIndex(0)
-          }
-        } else if (key.name === "delete") {
-          if (contextSearchCursor < contextSearch.length) {
-            const before = contextSearch.slice(0, contextSearchCursor)
-            const after = contextSearch.slice(contextSearchCursor + 1)
-            setContextSearch(before + after)
-          }
-        } else {
-          const ch = key.sequence || ""
-          if (ch.length === 1 && !key.ctrl) {
-            const before = contextSearch.slice(0, contextSearchCursor)
-            const after = contextSearch.slice(contextSearchCursor)
-            setContextSearch(before + ch + after)
-            setContextSearchCursor((c: number) => c + 1)
-            setContextSelectIndex(0)
-          }
-        }
-        return
-      }
+  const handleOpenPod = useCallback((pod: PodDetail) => {
+    setSelectedPod(pod)
+    setPodDetailFull(null)
+    setPodDetailMode("sections")
+    setPodDetailLoading(true)
+    setPage("pod-detail")
+    fetchPodDetailAsync(currentContext, pod.name, pod.namespace).then((detail) => {
+      setPodDetailFull(detail)
+      setPodDetailLoading(false)
+    })
+  }, [currentContext])
 
-      if (searchMode) {
-        if (key.name === "escape") {
-          setSearchMode(false)
-          setSearchQuery("")
-        } else if (key.name === "return") {
-          setSearchMode(false)
-        }
-        return
-      }
-
-      if (podView) {
-        if (key.name === "escape") {
-          if (podDetailMode === "details") {
-            setPodDetailMode("sections")
-          } else {
-            setPodView(false)
-            setSelectedPod(null)
-            setPodDetailFull(null)
-            setPodSectionIndex(0)
-            setPodDetailScrollOffset(0)
-            setPodDetailMode("sections")
-            setDetailRowIndex(0)
-            setToastMessage("")
-          }
-        } else if (key.name === "return") {
-          if (podDetailMode === "sections") {
-            setPodDetailMode("details")
-            setDetailRowIndex(0)
-            setPodDetailScrollOffset(0)
-          } else if (podDetailFull) {
-            const value = getDetailValue(podDetailFull, podSectionIndex, detailRowIndex)
-            if (value) {
-              copyToClipboard(value)
-              setToastMessage("value copied to clipboard")
-              if (toastTimerRef.current) clearTimeout(toastTimerRef.current)
-              toastTimerRef.current = setTimeout(() => setToastMessage(""), 5000)
-            }
-          }
-        } else if (key.name === "up") {
-          if (podDetailMode === "sections") {
-            if (podSectionIndex > 0) {
-              setPodSectionIndex((i: number) => i - 1)
-              setPodDetailScrollOffset(0)
-            }
-          } else {
-            if (detailRowIndex > 0) {
-              setDetailRowIndex((i: number) => i - 1)
-              if (detailRowIndex <= podDetailScrollOffset) {
-                setPodDetailScrollOffset((i: number) => Math.max(0, i - 1))
-              }
-            }
-          }
-        } else if (key.name === "down") {
-          if (podDetailMode === "sections") {
-            if (podDetailFull) {
-              const maxSections = buildSections(podDetailFull).length
-              if (podSectionIndex < maxSections - 1) {
-                setPodSectionIndex((i: number) => i + 1)
-                setPodDetailScrollOffset(0)
-              }
-            }
-          } else if (podDetailFull) {
-            const maxRows = getDetailRowCount(podDetailFull, podSectionIndex)
-            if (maxRows > 0 && detailRowIndex < maxRows - 1) {
-              setDetailRowIndex((i: number) => i + 1)
-              const maxVisibleRows = Math.max(1, termHeight - 24)
-              if (detailRowIndex >= podDetailScrollOffset + maxVisibleRows - 1) {
-                setPodDetailScrollOffset((i: number) => i + 1)
-              }
-            }
-          }
-        } else if (key.name === "q") {
-          renderer.destroy()
-        }
-        return
-      }
-
-      if (nodeView) {
-        if (key.name === "escape") {
-          setNodeView(false)
-          setSelectedNode(null)
-          setPods([])
-          setPodListIndex(0)
-          setPodScrollOffset(0)
-        } else if (key.name === "up") {
-          if (podListIndex > 0) {
-            setPodListIndex((i: number) => i - 1)
-            if (podListIndex <= podScrollOffset) {
-              setPodScrollOffset((i: number) => Math.max(0, i - 1))
-            }
-          }
-        } else if (key.name === "down") {
-          if (podListIndex < pods.length - 1) {
-            setPodListIndex((i: number) => i + 1)
-            const maxPodRows = Math.max(1, termHeight - 20)
-            if (podListIndex >= podScrollOffset + maxPodRows - 1) {
-              setPodScrollOffset((i: number) => i + 1)
-            }
-          }
-        } else if (key.name === "return") {
-          const pod = pods[podListIndex]
-          if (pod) {
-            setSelectedPod(pod)
-            setPodDetailFull(null)
-            setPodSectionIndex(0)
-            setPodDetailScrollOffset(0)
-            setPodDetailMode("sections")
-            setDetailRowIndex(0)
-            setToastMessage("")
-            setPodView(true)
-            setPodDetailLoading(true)
-            fetchPodDetailAsync(currentContext, pod.name, pod.namespace).then((detail) => {
-              setPodDetailFull(detail)
-              setPodDetailLoading(false)
-            })
-          }
-        } else if (key.name === "m") {
-          setMetricMode((prev) => prev === "pct" ? "raw" : "pct")
-        } else if (key.name === "q") {
-          renderer.destroy()
-        }
-        return
-      }
-
-      if (detailView) {
-        if (key.name === "escape") {
-          setDetailView(false)
-          setNodeDetails([])
-          setNodeListIndex(0)
-          setNodeScrollOffset(0)
-        } else if (key.name === "up") {
-          if (nodeListIndex > 0) {
-            setNodeListIndex((i: number) => i - 1)
-            if (nodeListIndex <= nodeScrollOffset) {
-              setNodeScrollOffset((i: number) => Math.max(0, i - 1))
-            }
-          }
-        } else if (key.name === "down") {
-          if (nodeListIndex < nodeDetails.length - 1) {
-            setNodeListIndex((i: number) => i + 1)
-            if (nodeListIndex >= nodeScrollOffset + maxNodeRows - 1) {
-              setNodeScrollOffset((i: number) => i + 1)
-            }
-          }
-        } else if (key.name === "return") {
-          const node = nodeDetails[nodeListIndex]
-          if (node) {
-            setSelectedNode(node)
-            setPods([])
-            setPodListIndex(0)
-            setPodScrollOffset(0)
-            setNodeView(true)
-            setNodeLoading(true)
-            fetchPodsForNodeAsync(currentContext, node.name).then((podsList) => {
-              setPods(podsList)
-              setNodeLoading(false)
-            })
-          }
-        } else if (key.name === "m") {
-          setMetricMode((prev) => prev === "pct" ? "raw" : "pct")
-        } else if (key.name === "q") {
-          renderer.destroy()
-        }
-        return
-      }
-
-      if (key.name === "up") {
-        setSelectedIndex((i: number) => Math.max(0, i - 1))
-      } else if (key.name === "down") {
-        setSelectedIndex((i: number) => Math.min(displayed.length - 1, i + 1))
-      } else if (key.name === "return") {
-          if (selectedCluster) {
-            setNodeDetails([])
-            setNodeListIndex(0)
-            setNodeScrollOffset(0)
-            setDetailView(true)
-            setDetailLoading(true)
-            fetchNodeDetailsAsync(currentContext).then((nodes) => {
-              setNodeDetails(nodes)
-              setDetailLoading(false)
-            })
-          }
-      } else if (key.name === "q") {
-        renderer.destroy()
-      } else if (key.name === "s") {
-        setSortOrder((prev: SortOrder) => cycleSort(prev))
-      } else if (key.name === "/") {
-        setSearchMode(true)
-        setSearchQuery("")
-      } else if (key.name === "f") {
-        if (selectedCluster) {
-          setFavorites((prev: Set<string>) => {
-            const next = new Set(prev)
-            if (next.has(selectedCluster.name)) {
-              next.delete(selectedCluster.name)
-            } else {
-              next.add(selectedCluster.name)
-            }
-            return next
-          })
-        }
-      } else if (key.name === "c") {
-        if (contexts.length > 0) {
-          const curIdx = contexts.findIndex((c) => c.name === currentContext)
-          setContextSelectIndex(curIdx >= 0 ? curIdx : 0)
-          setContextSearch("")
-          setContextSearchCursor(0)
-          setContextModalOpen(true)
-        }
-      } else if (key.name === "m") {
-        setMetricMode((prev) => prev === "pct" ? "raw" : "pct")
-      }
-    },
-    [
-      displayed.length,
-      selectedCluster,
-      searchMode,
-      detailView,
-      nodeView,
-      podView,
-      nodeDetails,
-      nodeListIndex,
-      nodeScrollOffset,
-      maxNodeRows,
-      pods,
-      podListIndex,
-      podScrollOffset,
-      selectedPod,
-      podDetailFull,
-      podSectionIndex,
-      podDetailScrollOffset,
-      podDetailMode,
-      detailRowIndex,
-      toastMessage,
-      contextModalOpen,
-      filteredContexts,
-      contextSelectIndex,
-      contextSearch,
-      contextSearchCursor,
-      currentContext,
-      contexts,
-      doContextSwitch,
-      renderer,
-      termHeight,
-    ],
-  )
-
-  useKeyboard(handleKey)
-
-  const modalWidth = 52
-  const modalHeight = 10
-  const modalLeft = Math.floor((termWidth - modalWidth) / 2)
-  const modalTop = Math.floor((termHeight - modalHeight) / 2)
-
-  const maxVisible = 5
-  const ctxScrollOffset = Math.max(
-    0,
-    Math.min(contextSelectIndex, filteredContexts.length - maxVisible),
-  )
-  const visibleContexts = filteredContexts.slice(ctxScrollOffset, ctxScrollOffset + maxVisible)
-
-  const searchBeforeCursor = contextSearch.slice(0, contextSearchCursor)
-  const searchAtCursor = contextSearch.slice(contextSearchCursor, contextSearchCursor + 1)
-  const searchAfterCursor = contextSearch.slice(contextSearchCursor + 1)
-  const searchDisplay = t`${fg("#58A6FF")("filter: ")}${fg("#E6EDF3")(searchBeforeCursor)}${fg("#58A6FF")(searchAtCursor || "█")}${fg("#E6EDF3")(searchAfterCursor)}`
-
-  const headerContent = (() => {
-    if (loading) {
-      if (podView && selectedPod && selectedNode && selectedCluster) {
-        return t`${fg("#8B949E")("k8s manager")}${fg("#484F58")(" | ")}${fg("#58A6FF")("context:")}${fg("#8B949E")(` ${currentContext} `)}${fg("#484F58")(" | ")}${fg("#58A6FF")("cluster:")}${fg("#8B949E")(` ${selectedCluster.name} `)}${fg("#484F58")(" | ")}${fg("#58A6FF")("node:")}${fg("#8B949E")(` ${selectedNode.name} `)}${fg("#484F58")(" | ")}${fg("#58A6FF")("pod:")}${fg("#8B949E")(` ${selectedPod.name} `)}${fg("#D29922")(spinner)}`
-      }
-      if (nodeView && selectedNode && selectedCluster) {
-        return t`${fg("#8B949E")("k8s manager")}${fg("#484F58")(" | ")}${fg("#58A6FF")("context:")}${fg("#8B949E")(` ${currentContext} `)}${fg("#484F58")(" | ")}${fg("#58A6FF")("cluster:")}${fg("#8B949E")(` ${selectedCluster.name} `)}${fg("#484F58")(" | ")}${fg("#58A6FF")("node:")}${fg("#8B949E")(` ${selectedNode.name} `)}${fg("#D29922")(spinner)}`
-      }
-      if (detailView && selectedCluster) {
-        return t`${fg("#8B949E")("k8s manager")}${fg("#484F58")(" | ")}${fg("#58A6FF")("context:")}${fg("#8B949E")(` ${currentContext} `)}${fg("#484F58")(" | ")}${fg("#58A6FF")("cluster:")}${fg("#8B949E")(` ${selectedCluster.name} `)}${fg("#D29922")(spinner)}`
-      }
-      return t`${fg("#8B949E")("k8s manager")}${fg("#484F58")(" | ")}${fg("#58A6FF")("context:")}${fg("#8B949E")(` ${currentContext} `)}${fg("#D29922")(spinner)}`
+  const handleBack = useCallback(() => {
+    if (page === "pod-detail") {
+      setSelectedPod(null)
+      setPodDetailFull(null)
+      setPodDetailMode("sections")
+      setPage("node-detail")
+    } else if (page === "node-detail") {
+      setSelectedNode(null)
+      setPods([])
+      setPage("cluster-detail")
+    } else if (page === "cluster-detail") {
+      setSelectedCluster(null)
+      setNodeDetails([])
+      setPage("cluster-list")
     }
-    if (podView && selectedPod && selectedNode && selectedCluster) {
-      return t`${fg("#8B949E")("k8s manager")}${fg("#484F58")(" | ")}${fg("#58A6FF")("context:")}${fg("#8B949E")(` ${currentContext}`)}${fg("#484F58")(" | ")}${fg("#58A6FF")("cluster:")}${fg("#8B949E")(` ${selectedCluster.name}`)}${fg("#484F58")(" | ")}${fg("#58A6FF")("node:")}${fg("#8B949E")(` ${selectedNode.name}`)}${fg("#484F58")(" | ")}${fg("#58A6FF")("pod:")}${fg("#8B949E")(` ${selectedPod.name}`)}`
-    }
-    if (nodeView && selectedNode && selectedCluster) {
-      return t`${fg("#8B949E")("k8s manager")}${fg("#484F58")(" | ")}${fg("#58A6FF")("context:")}${fg("#8B949E")(` ${currentContext}`)}${fg("#484F58")(" | ")}${fg("#58A6FF")("cluster:")}${fg("#8B949E")(` ${selectedCluster.name}`)}${fg("#484F58")(" | ")}${fg("#58A6FF")("node:")}${fg("#8B949E")(` ${selectedNode.name}`)}`
-    }
-    if (detailView && selectedCluster) {
-      return t`${fg("#8B949E")("k8s manager")}${fg("#484F58")(" | ")}${fg("#58A6FF")("context:")}${fg("#8B949E")(` ${currentContext}`)}${fg("#484F58")(" | ")}${fg("#58A6FF")("cluster:")}${fg("#8B949E")(` ${selectedCluster.name}`)}`
-    }
-    return t`${fg("#8B949E")("k8s manager")}${fg("#484F58")(" | ")}${fg("#58A6FF")("context:")}${fg("#8B949E")(` ${currentContext}`)}`
-  })()
+  }, [page])
 
-  const commandsContent = (() => {
-    if (podView) {
-      if (podDetailMode === "sections") {
-        return t`${fg("#58A6FF")("[enter]")} open  ${fg("#58A6FF")("[↑↓]")} nav  ${fg("#58A6FF")("[esc]")} back  ${fg("#58A6FF")("[q]")}uit`
-      }
-      return t`${fg("#58A6FF")("[enter]")} copy  ${fg("#58A6FF")("[↑↓]")} scroll  ${fg("#58A6FF")("[esc]")} back  ${fg("#58A6FF")("[q]")}uit`
-    }
-    if (nodeView) {
-      return t`${fg("#58A6FF")("[enter]")} pod  ${fg("#58A6FF")("[esc]")} back  ${fg("#58A6FF")("[m]")}etric  ${fg("#58A6FF")("[q]")}uit`
-    }
-    if (detailView) {
-      return t`${fg("#58A6FF")("[enter]")} node  ${fg("#58A6FF")("[esc]")} back  ${fg("#58A6FF")("[m]")}etric  ${fg("#58A6FF")("[q]")}uit`
-    }
-    return t`${fg("#58A6FF")("[enter]")} open  ${fg("#58A6FF")("[s]")}ort  ${fg("#58A6FF")("[/]")}find  ${fg("#58A6FF")("[f]")}avorite  ${fg("#58A6FF")("[m]")}etric  ${fg("#58A6FF")("[c]")}ontext  ${fg("#58A6FF")("[q]")}uit`
-  })()
+  const handleToggleMetric = useCallback(() => {
+    setMetricMode((prev) => prev === "pct" ? "raw" : "pct")
+  }, [])
 
-  const visibleNodes = nodeDetails.slice(nodeScrollOffset, nodeScrollOffset + maxNodeRows)
+  const handleQuit = useCallback(() => {
+    renderer.destroy()
+  }, [renderer])
+
+  const breadcrumb = buildBreadcrumbParts({
+    currentContext,
+    clusterName: selectedCluster?.name,
+    nodeName: selectedNode?.name,
+    podName: selectedPod?.name,
+    spinner: loading ? spinner : undefined,
+  })
+
+  const showLegends = page === "cluster-list"
 
   return (
     <box style={{ flexDirection: "column", width: "100%", height: "100%", gap: 0 }}>
-      <box
-        title="K8STUI"
-        borderStyle="single"
-        borderColor="#30363D"
-        style={{
-          flexDirection: "row",
-          justifyContent: "space-between",
-          alignItems: "center",
-          height: 3,
-          paddingLeft: 1,
-          paddingRight: 1,
-        }}
-      >
-        <text fg="#8B949E" content={headerContent} />
-        <text fg="#8B949E" content={clock} />
-      </box>
+      <HeaderBar content={breadcrumb} clock={clock} />
 
-      {searchMode && (
-        <box
-          title="SEARCH"
-          borderStyle="single"
-          borderColor="#30363D"
-          style={{
-            flexDirection: "row",
-            height: 3,
-            paddingLeft: 1,
-            alignItems: "center",
-            backgroundColor: "#0D1117",
-          }}
-        >
-          <text content={t`${fg("#58A6FF")("search:")} `} />
-          <input
-            value={searchQuery}
-            onInput={setSearchQuery}
-            focused={true}
-            width={50}
-            backgroundColor="#0D1117"
-            textColor="#E6EDF3"
-            cursorColor="#58A6FF"
-          />
-        </box>
+      {page === "cluster-list" && (
+        <ClusterListPage
+          clusters={clusters}
+          contexts={contexts}
+          currentContext={currentContext}
+          metricMode={metricMode}
+          loading={loading}
+          spinner={spinner}
+          onOpenCluster={handleOpenCluster}
+          onSwitchContext={doContextSwitch}
+          onToggleMetric={handleToggleMetric}
+          onQuit={handleQuit}
+        />
       )}
 
-      {podView && selectedPod ? (
-        <box style={{ flexDirection: "row", flexGrow: 1, width: "100%", gap: 0 }}>
-          <box
-            title="SECTIONS"
-            borderStyle="single"
-            borderColor={podDetailMode === "sections" ? "#58A6FF" : "#30363D"}
-            style={{ flexDirection: "column", width: 28 }}
-          >
-            {podDetailLoading ? (
-              <box style={{ flexDirection: "column", alignItems: "center", justifyContent: "center", flexGrow: 1 }}>
-                <text content={t`${fg("#D29922")(spinner)} ${fg("#8B949E")("Loading pod detail...")}`} />
-              </box>
-            ) : podDetailFull ? (
-              <PodSectionList pod={podDetailFull} selectedIndex={podSectionIndex} />
-            ) : (
-              <box style={{ flexDirection: "column", alignItems: "center", justifyContent: "center", flexGrow: 1 }}>
-                <text fg="#F85149" content="Failed to load pod detail" />
-              </box>
-            )}
-          </box>
-          <box
-            title="DETAILS"
-            borderStyle="single"
-            borderColor={podDetailMode === "details" ? "#58A6FF" : "#30363D"}
-            style={{ flexDirection: "column", flexGrow: 1 }}
-          >
-            {podDetailFull ? (
-              <PodSectionDetail pod={podDetailFull} sectionIndex={podSectionIndex} scrollOffset={podDetailScrollOffset} detailMode={podDetailMode === "details"} detailRowIndex={detailRowIndex} />
-            ) : null}
-          </box>
-          {toastMessage && (
-            <box
-              style={{
-                position: "absolute",
-                bottom: 2,
-                right: 1,
-                width: 26,
-                height: 3,
-                zIndex: 50,
-                backgroundColor: "#1A3A5C",
-                flexDirection: "column",
-                alignItems: "center",
-                justifyContent: "center",
-                paddingLeft: 1,
-                paddingRight: 1,
-              }}
-            >
-              <text fg="#E6EDF3" content={toastMessage} />
-            </box>
-          )}
-        </box>
-      ) : nodeView && selectedNode ? (
-        <>
-          <box
-            title={`OVERVIEW | ${selectedNode.name}`}
-            borderStyle="single"
-            borderColor="#30363D"
-            style={{ flexDirection: "column", height: 7, width: "100%" }}
-          >
-            <NodeBars node={selectedNode} metricMode={metricMode} />
-          </box>
-          <box
-            title="PODS"
-            borderStyle="single"
-            borderColor="#30363D"
-            style={{ flexDirection: "column", flexGrow: 1, width: "100%" }}
-          >
-            {nodeLoading ? (
-              <box style={{ flexDirection: "column", alignItems: "center", justifyContent: "center", flexGrow: 1 }}>
-                <text content={t`${fg("#D29922")(spinner)} ${fg("#8B949E")("Loading pod data...")}`} />
-              </box>
-            ) : (
-              <PodTable pods={pods} scrollOffset={podScrollOffset} loading={false} metricMode={metricMode} cpuAllocatable={selectedNode.cpuAllocatable} memAllocatable={selectedNode.memAllocatable} selectedIndex={podListIndex} />
-            )}
-          </box>
-        </>
-      ) : detailView && selectedCluster ? (
-        <>
-          <box
-            title="OVERVIEW"
-            borderStyle="single"
-            borderColor="#30363D"
-            style={{ flexDirection: "column", height: 7, width: "100%" }}
-          >
-            <ClusterOverview cluster={selectedCluster} metricMode={metricMode} />
-          </box>
-          <box
-            title="NODES"
-            borderStyle="single"
-            borderColor="#30363D"
-            style={{ flexDirection: "column", flexGrow: 1, width: "100%" }}
-          >
-            {detailLoading ? (
-              <box style={{ flexDirection: "column", alignItems: "center", justifyContent: "center", flexGrow: 1 }}>
-                <text content={t`${fg("#D29922")(spinner)} ${fg("#8B949E")("Loading node data...")}`} />
-              </box>
-            ) : (
-              <NodeTable
-                nodes={visibleNodes}
-                selectedIndex={nodeListIndex}
-                scrollOffset={nodeScrollOffset}
-                metricMode={metricMode}
-              />
-            )}
-          </box>
-        </>
-      ) : (
-        <box
-          title="CLUSTER"
-          borderStyle="single"
-          borderColor="#30363D"
-          style={{
-            flexDirection: "column",
-            flexGrow: 1,
-            width: "100%",
-          }}
-        >
-          {loading ? (
-            <box style={{ flexDirection: "column", alignItems: "center", justifyContent: "center", flexGrow: 1 }}>
-              <text content={t`${fg("#D29922")(spinner)} ${fg("#8B949E")("Loading cluster data...")}`} />
-              <text fg="#484F58" content={`Connecting to ${currentContext || "cluster"}...`} />
-            </box>
-          ) : displayed.length > 0 ? (
-            <ClusterTable
-              clusters={displayed}
-              selectedIndex={selectedIndex}
-              sortOrder={sortOrder}
-              favorites={favorites}
-              metricMode={metricMode}
-            />
-          ) : (
-            <box style={{ flexDirection: "column", alignItems: "center", justifyContent: "center", flexGrow: 1 }}>
-              <text fg="#8B949E" content="No clusters found" />
-              {searchQuery ? (
-                <text fg="#484F58" content={`No clusters match "${searchQuery}"`} />
-              ) : contexts.length === 0 ? (
-                <text fg="#484F58" content="No kubeconfig at ~/.kube/config" />
-              ) : (
-                <text fg="#484F58" content="No contexts configured" />
-              )}
-            </box>
-          )}
-        </box>
+      {page === "cluster-detail" && selectedCluster && (
+        <ClusterDetailPage
+          cluster={selectedCluster}
+          nodeDetails={nodeDetails}
+          loading={detailLoading}
+          spinner={spinner}
+          metricMode={metricMode}
+          onOpenNode={handleOpenNode}
+          onBack={handleBack}
+          onToggleMetric={handleToggleMetric}
+          onQuit={handleQuit}
+        />
       )}
 
-      {!detailView && !nodeView && !podView && (
-        <box
-          title="LEGENDS"
-          borderStyle="single"
-          borderColor="#30363D"
-          style={{
-            flexDirection: "row",
-            gap: 2,
-            height: 3,
-            paddingLeft: 1,
-            alignItems: "center",
-          }}
-        >
-          <text content={t`${fg("#3FB950")("●")} connected`} fg="#8B949E" />
-          <text content={t`${fg("#D29922")("▲")} degraded`} fg="#8B949E" />
-          <text content={t`${fg("#F85149")("○")} unreachable`} fg="#8B949E" />
-        </box>
+      {page === "node-detail" && selectedNode && (
+        <NodeDetailPage
+          node={selectedNode}
+          pods={pods}
+          loading={nodeLoading}
+          spinner={spinner}
+          metricMode={metricMode}
+          onOpenPod={handleOpenPod}
+          onBack={handleBack}
+          onToggleMetric={handleToggleMetric}
+          onQuit={handleQuit}
+        />
       )}
 
-      <box
-        title="COMMANDS"
-        borderStyle="single"
-        borderColor="#30363D"
-        style={{
-          flexDirection: "row",
-          height: 3,
-          paddingLeft: 1,
-          alignItems: "center",
-        }}
-      >
-        <text fg="#8B949E" content={commandsContent} />
-      </box>
-
-      {contextModalOpen && (
-        <box
-          title="SWITCH CONTEXT"
-          borderStyle="single"
-          borderColor="#58A6FF"
-          style={{
-            position: "absolute",
-            top: modalTop,
-            left: modalLeft,
-            width: modalWidth,
-            height: modalHeight,
-            flexDirection: "column",
-            zIndex: 100,
-            backgroundColor: "#0D1117",
-            paddingLeft: 1,
-            paddingTop: 1,
-          }}
-        >
-          <box style={{ height: 1, width: "100%" }}>
-            <text content={searchDisplay} />
-          </box>
-          <box style={{ height: 1, width: "100%" }}>
-            <text fg="#30363D" content={pad("", modalWidth - 4).replace(/ /g, "─")} />
-          </box>
-          {filteredContexts.length === 0 ? (
-            <box style={{ height: 1, width: "100%" }}>
-              <text fg="#484F58" content="No matching contexts" />
-            </box>
-          ) : (
-            visibleContexts.map((ctx, vi) => {
-              const realIndex = ctxScrollOffset + vi
-              const isSelected = realIndex === contextSelectIndex
-              const isCurrent = ctx.name === currentContext
-              const bgColor = isSelected ? "#1A3A5C" : undefined
-              const textColor = isSelected ? "#E6EDF3" : "#8B949E"
-              const prefix = isCurrent ? fg("#3FB950")("● ") : "  "
-              const server = ctx.server.replace(/^https?:\/\//, "").substring(0, 24)
-
-              return (
-                <box key={ctx.name} style={{ height: 1, width: "100%", backgroundColor: bgColor }}>
-                  <text fg={textColor} content={t`${prefix}${pad(ctx.name, 20)}${fg("#484F58")(server)}`} />
-                </box>
-              )
-            })
-          )}
-          {Array.from({ length: maxVisible - (filteredContexts.length === 0 ? 1 : visibleContexts.length) }, (_, i) => (
-            <box key={`empty-${i}`} style={{ height: 1, width: "100%" }}>
-              <text content="" />
-            </box>
-          ))}
-          <box style={{ height: 1, width: "100%" }}>
-            <text fg="#58A6FF" content={`${filteredContexts.length} of ${contexts.length} contexts`} />
-          </box>
-        </box>
+      {page === "pod-detail" && selectedPod && (
+        <PodDetailPage
+          pod={selectedPod}
+          podDetailFull={podDetailFull}
+          loading={podDetailLoading}
+          spinner={spinner}
+          onBack={handleBack}
+          onQuit={handleQuit}
+        />
       )}
+
+      <CommandsBar page={page} podDetailMode={podDetailMode} />
     </box>
   )
-}
-
-function pad(s: string, len: number): string {
-  return s.length >= len ? s : s + " ".repeat(len - s.length)
 }

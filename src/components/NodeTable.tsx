@@ -1,5 +1,5 @@
 import { t, fg, bold } from "@opentui/core"
-import type { NodeDetail, MetricMode } from "./types"
+import type { NodeDetail, MetricMode } from "../types"
 
 function pad(s: string, len: number): string {
   if (s.length >= len) return s.slice(0, Math.max(0, len - 3)) + "..."

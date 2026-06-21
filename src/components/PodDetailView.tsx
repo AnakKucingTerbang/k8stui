@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react"
 import { useTerminalDimensions } from "@opentui/react"
 import { t, fg, bold } from "@opentui/core"
-import type { PodDetailFull } from "./types"
+import type { PodDetailFull } from "../types"
 
 type Section =
   | { type: "metadata"; label: string }

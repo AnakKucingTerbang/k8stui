@@ -1,7 +1,7 @@
 import { useTerminalDimensions } from "@opentui/react"
 import { t, fg, bold } from "@opentui/core"
-import type { NodeDetail, PodDetail, MetricMode } from "./types"
-import { parseCpuMillicores, parseMemBytes } from "./kube"
+import type { NodeDetail, PodDetail, MetricMode } from "../types"
+import { parseCpuMillicores, parseMemBytes } from "../kube"
 
 function barColor(pct: number): string {
   if (pct >= 90) return "#F85149"

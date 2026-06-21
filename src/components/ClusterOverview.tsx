@@ -1,6 +1,6 @@
 import { useTerminalDimensions } from "@opentui/react"
 import { t, fg } from "@opentui/core"
-import type { Cluster, MetricMode } from "./types"
+import type { Cluster, MetricMode } from "../types"
 
 function barColor(pct: number): string {
   if (pct >= 90) return "#F85149"
