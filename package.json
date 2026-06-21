@@ -1,0 +1,22 @@
+{
+  "name": "k8cli",
+  "module": "src/index.tsx",
+  "scripts": {
+    "start": "bun run src/index.tsx"
+  },
+  "type": "module",
+  "private": true,
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/react": "^19.2.17"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "@kubernetes/client-node": "^1.4.0",
+    "@opentui/core": "^0.4.1",
+    "@opentui/react": "^0.4.1",
+    "react": "^19.2.7"
+  }
+}
