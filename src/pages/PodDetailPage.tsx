@@ -1,13 +1,15 @@
 import { useCallback, useMemo, useRef, useState } from "react"
 import { useKeyboard, useTerminalDimensions } from "@opentui/react"
-import { t, fg } from "@opentui/core"
+import { t, fg, bold } from "@opentui/core"
 import { CommandsBar } from "../components/CommandsBar"
-import { PodSectionList, PodSectionDetail, buildSections, getDetailValue, getDetailRowCount } from "../components/PodDetailView"
+import { PodSectionList, PodSectionDetail, buildSections, getDetailValue, getDetailRowCount, getSelectedDisplay } from "../components/PodDetailView"
 import { Toast } from "../components/Toast"
 import { copyToClipboard } from "../clipboard"
 import type { PodDetail, PodDetailFull } from "../types"
 
 type PodDetailMode = "sections" | "details"
+
+const DASH = "──"
 
 interface PodDetailPageProps {
   pod: PodDetail
@@ -140,21 +142,46 @@ export function PodDetailPage({
             </box>
           )}
         </box>
-        <box
-          title="DETAILS"
-          borderStyle="single"
-          borderColor={podDetailMode === "details" ? "#58A6FF" : "#30363D"}
-          style={{ flexDirection: "column", flexGrow: 1 }}
-        >
-          {podDetailFull ? (
-            <PodSectionDetail
-              pod={podDetailFull}
-              sectionIndex={podSectionIndex}
-              scrollOffset={podDetailScrollOffset}
-              detailMode={podDetailMode === "details"}
-              detailRowIndex={detailRowIndex}
-            />
-          ) : null}
+        <box style={{ flexDirection: "column", flexGrow: 1, gap: 0 }}>
+          <box
+            title="DETAILS"
+            borderStyle="single"
+            borderColor={podDetailMode === "details" ? "#58A6FF" : "#30363D"}
+            style={{ flexDirection: "column", flexGrow: 1 }}
+          >
+            {podDetailFull ? (
+              <PodSectionDetail
+                pod={podDetailFull}
+                sectionIndex={podSectionIndex}
+                scrollOffset={podDetailScrollOffset}
+                detailMode={podDetailMode === "details"}
+                detailRowIndex={detailRowIndex}
+              />
+            ) : null}
+          </box>
+          <box
+            title="SELECTED"
+            borderStyle="single"
+            borderColor="#30363D"
+            style={{ flexDirection: "column", height: 3 }}
+          >
+            {(() => {
+              if (podDetailMode !== "details" || !podDetailFull) {
+                return <text fg="#8B949E" content={DASH} />
+              }
+              const sel = getSelectedDisplay(podDetailFull, podSectionIndex, detailRowIndex, podDetailScrollOffset)
+              if (!sel) {
+                return <text fg="#8B949E" content={DASH} />
+              }
+              if (sel.isParent) {
+                return <text content={t`${bold(fg("#58A6FF")(sel.key))}`} />
+              }
+              if (sel.key === "") {
+                return <text content={t`${fg("#8B949E")(sel.value)}`} />
+              }
+              return <text content={t`${fg("#8B949E")(sel.key)} ${fg("#484F58")("=")} ${fg("#E6EDF3")(sel.value)}`} />
+            })()}
+          </box>
         </box>
         <Toast message={toastMessage} />
       </box>

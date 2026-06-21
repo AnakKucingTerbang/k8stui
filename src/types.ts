@@ -65,8 +65,8 @@ export interface PodContainer {
 export interface PodDetailFull {
   name: string
   namespace: string
-  labels: string
-  annotations: string
+  labels: string[]
+  annotations: string[]
   created: string
   containers: PodContainer[]
   phase: string

@@ -64,15 +64,42 @@ function val(s: string): string {
   return s || DASH
 }
 
-function buildRows(pod: PodDetailFull, section: Section): { key: string; value: string }[] {
-  const rows: { key: string; value: string }[] = []
+interface Row {
+  key: string
+  value: string
+  isParent?: boolean
+  indent?: boolean
+}
+
+function buildRows(pod: PodDetailFull, section: Section): Row[] {
+  const rows: Row[] = []
 
   switch (section.type) {
     case "metadata":
       rows.push({ key: "Name", value: val(pod.name) })
       rows.push({ key: "Namespace", value: val(pod.namespace) })
-      rows.push({ key: "Labels", value: val(pod.labels) })
-      rows.push({ key: "Annotations", value: val(pod.annotations) })
+      if (pod.labels.length === 1 && pod.labels[0] === DASH) {
+        rows.push({ key: "Labels", value: DASH })
+      } else {
+        rows.push({ key: "Labels", value: "", isParent: true })
+        for (const l of pod.labels) {
+          const eq = l.indexOf("=")
+          const lk = eq >= 0 ? l.slice(0, eq) : l
+          const lv = eq >= 0 ? l.slice(eq + 1) : ""
+          rows.push({ key: lk, value: lv, indent: true })
+        }
+      }
+      if (pod.annotations.length === 1 && pod.annotations[0] === DASH) {
+        rows.push({ key: "Annotations", value: DASH })
+      } else {
+        rows.push({ key: "Annotations", value: "", isParent: true })
+        for (const a of pod.annotations) {
+          const eq = a.indexOf("=")
+          const ak = eq >= 0 ? a.slice(0, eq) : a
+          const av = eq >= 0 ? a.slice(eq + 1) : ""
+          rows.push({ key: ak, value: av, indent: true })
+        }
+      }
       rows.push({ key: "Created", value: pod.created ? `${pod.created} ago` : DASH })
       break
     case "container": {
@@ -111,6 +138,31 @@ function buildRows(pod: PodDetailFull, section: Section): { key: string; value: 
   }
 
   return rows
+}
+
+export interface SelectedDisplay {
+  key: string
+  value: string
+  isParent: boolean
+}
+
+export function getSelectedDisplay(pod: PodDetailFull, sectionIndex: number, rowIndex: number, scrollOffset: number): SelectedDisplay | null {
+  const sections = buildSections(pod)
+  const section = sections[sectionIndex]
+  if (!section) return null
+
+  if (section.type === "yaml") {
+    const lines = (pod.yaml || DASH).split("\n")
+    const lineIndex = scrollOffset + rowIndex
+    const line = lines[lineIndex]
+    if (line === undefined) return null
+    return { key: "", value: line, isParent: false }
+  }
+
+  const rows = buildRows(pod, section)
+  const row = rows[rowIndex]
+  if (!row) return null
+  return { key: row.key, value: row.value, isParent: !!row.isParent }
 }
 
 export function getDetailValue(pod: PodDetailFull, sectionIndex: number, rowIndex: number): string {
@@ -156,9 +208,6 @@ export function PodSectionDetail({ pod, sectionIndex, scrollOffset, detailMode, 
     const visible = lines.slice(scrollOffset, scrollOffset + maxVisibleRows)
     return (
       <box style={{ flexDirection: "column", paddingLeft: 1, paddingRight: 1, gap: 0 }}>
-        <box style={{ height: 1, width: "100%", paddingBottom: 1 }}>
-          <text content={t`${bold(fg("#58A6FF")("Yaml"))}`} />
-        </box>
         {visible.map((line, i) => (
           <box key={`yl-${i}`} style={{ height: 1, width: "100%" }}>
             <text fg="#8B949E" content={line} />
@@ -173,15 +222,29 @@ export function PodSectionDetail({ pod, sectionIndex, scrollOffset, detailMode, 
 
   return (
     <box style={{ flexDirection: "column", paddingLeft: 1, paddingRight: 1, gap: 0 }}>
-      <box style={{ height: 1, width: "100%", paddingBottom: 1 }}>
-        <text content={t`${bold(fg("#58A6FF")(section.label))}`} />
-      </box>
       {visible.map((row, i) => {
         const absIndex = scrollOffset + i
         const isHighlighted = detailMode && absIndex === detailRowIndex
+        const bgColor = isHighlighted ? "#1A3A5C" : undefined
+
+        if (row.isParent) {
+          return (
+            <box key={`kv-${i}`} style={{ height: 1, width: "100%", backgroundColor: bgColor }}>
+              <text content={t`${bold(fg("#58A6FF")(row.key))}`} />
+            </box>
+          )
+        }
+
         const keyColor = isHighlighted ? "#E6EDF3" : "#8B949E"
         const valColor = isHighlighted ? "#E6EDF3" : "#E6EDF3"
-        const bgColor = isHighlighted ? "#1A3A5C" : undefined
+
+        if (row.indent) {
+          return (
+            <box key={`kv-${i}`} style={{ height: 1, width: "100%", backgroundColor: bgColor }}>
+              <text content={t`${fg(keyColor)(`  ${pad(row.key, KEY_WIDTH - 2)}${SEP}`)}${fg(valColor)(row.value)}`} />
+            </box>
+          )
+        }
 
         return (
           <box key={`kv-${i}`} style={{ height: 1, width: "100%", backgroundColor: bgColor }}>

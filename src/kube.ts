@@ -422,10 +422,10 @@ export async function fetchPodDetailAsync(contextName: string, podName: string, 
     const pod = JSON.parse(podJson)
 
     const labels = pod.metadata?.labels || {}
-    const labelsStr = Object.entries(labels).map(([k, v]) => `${k}=${v}`).join(", ")
+    const labelsArr = Object.entries(labels).map(([k, v]) => `${k}=${v}`)
 
     const annotations = pod.metadata?.annotations || {}
-    const annotationsStr = Object.entries(annotations).map(([k, v]) => `${k}=${v}`).join(", ")
+    const annotationsArr = Object.entries(annotations).map(([k, v]) => `${k}=${v}`)
 
     const containers: PodContainer[] = (pod.spec?.containers || []).map((c: any): PodContainer => {
       const resources = c.resources || {}
@@ -466,8 +466,8 @@ export async function fetchPodDetailAsync(contextName: string, podName: string, 
     return {
       name: pod.metadata?.name || "",
       namespace: pod.metadata?.namespace || "",
-      labels: labelsStr || "──",
-      annotations: annotationsStr || "──",
+      labels: labelsArr.length > 0 ? labelsArr : ["──"],
+      annotations: annotationsArr.length > 0 ? annotationsArr : ["──"],
       created: formatAge(pod.metadata?.creationTimestamp || ""),
       containers,
       phase: pod.status?.phase || "Unknown",
