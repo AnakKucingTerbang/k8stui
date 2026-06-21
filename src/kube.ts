@@ -1,5 +1,5 @@
 import { exec, execSync } from "child_process"
-import type { Cluster, ClusterStatus, KubeContext, NodeDetail, PodDetail } from "./types"
+import type { Cluster, ClusterStatus, KubeContext, NodeDetail, PodDetail, PodDetailFull, PodContainer } from "./types"
 
 function kubectlAsync(args: string, timeout = 5000): Promise<string> {
   return new Promise((resolve) => {
@@ -93,7 +93,7 @@ function parseTopNodes(output: string): Map<string, NodeMetrics> {
   const map = new Map<string, NodeMetrics>()
   if (!output) return map
 
-  const lines = output.split("\n").slice(1)
+  const lines = output.split("\n")
   for (const line of lines) {
     const parts = line.split(/\s+/).filter(Boolean)
     if (parts.length >= 5) {
@@ -108,14 +108,14 @@ function parseTopNodes(output: string): Map<string, NodeMetrics> {
   return map
 }
 
-function parseCpuMillicores(s: string): number {
+export function parseCpuMillicores(s: string): number {
   if (s.endsWith("m")) return parseInt(s, 10) || 0
   const n = parseFloat(s)
   if (isNaN(n)) return 0
   return Math.round(n * 1000)
 }
 
-function parseMemBytes(s: string): number {
+export function parseMemBytes(s: string): number {
   const match = s.match(/^(\d+(?:\.\d+)?)(Ki|Mi|Gi|Ti)?$/i)
   if (!match) return 0
   const val = parseFloat(match[1] ?? "0") || 0
@@ -318,13 +318,17 @@ export async function fetchNodeDetailsAsync(contextName: string): Promise<NodeDe
       const podsUsed = podCounts.running
       const podsTotal = podCounts.total
 
+      const allocatable = node.status?.allocatable || {}
+      const cpuAllocatable = parseCpuMillicores(allocatable.cpu || "0")
+      const memAllocatable = parseMemBytes(allocatable.memory || "0")
+
       const metrics = nodeMetrics.get(name)
       const cpuPct = ready && metrics ? metrics.cpuPct : 0
       const memPct = ready && metrics ? metrics.memPct : 0
       const cpu = ready && metrics ? metrics.cpu : "──"
       const mem = ready && metrics ? metrics.mem : "──"
 
-      return { name, ready, cpuPct, memPct, cpu, mem, age, podsUsed, podsTotal }
+      return { name, ready, cpuPct, memPct, cpu, mem, age, podsUsed, podsTotal, cpuAllocatable, memAllocatable }
     })
   } catch {
     return []
@@ -377,5 +381,104 @@ export async function fetchPodsForNodeAsync(contextName: string, nodeName: strin
     })
   } catch {
     return []
+  }
+}
+
+function parseProbe(probe: any): string {
+  if (!probe) return "──"
+  if (probe.httpGet) {
+    const port = probe.httpGet.port || ""
+    const path = probe.httpGet.path || "/"
+    return `HTTP GET ${port}${path}`
+  }
+  if (probe.tcpSocket) {
+    const port = probe.tcpSocket.port || ""
+    return `TCP ${port}`
+  }
+  if (probe.exec) {
+    const cmd = (probe.exec.command || []).join(" ")
+    return `Exec [${cmd}]`
+  }
+  return "──"
+}
+
+export async function fetchPodDetailAsync(contextName: string, podName: string, namespace: string): Promise<PodDetailFull | null> {
+  const [podJson, podYaml] = await Promise.all([
+    kubectlContextAsync(
+      contextName,
+      `get pod ${podName} -n ${namespace} -o json`,
+      5000,
+    ),
+    kubectlContextAsync(
+      contextName,
+      `get pod ${podName} -n ${namespace} -o yaml`,
+      5000,
+    ),
+  ])
+
+  if (!podJson) return null
+
+  try {
+    const pod = JSON.parse(podJson)
+
+    const labels = pod.metadata?.labels || {}
+    const labelsStr = Object.entries(labels).map(([k, v]) => `${k}=${v}`).join(", ")
+
+    const annotations = pod.metadata?.annotations || {}
+    const annotationsStr = Object.entries(annotations).map(([k, v]) => `${k}=${v}`).join(", ")
+
+    const containers: PodContainer[] = (pod.spec?.containers || []).map((c: any): PodContainer => {
+      const resources = c.resources || {}
+      const requests = resources.requests || {}
+      const limits = resources.limits || {}
+
+      const ports = (c.ports || []).map((p: any) => {
+        const port = p.containerPort || ""
+        const proto = p.protocol || "TCP"
+        return `${port}/${proto}`
+      })
+
+      const env: { name: string; value: string }[] = (c.env || []).map((e: any) => ({
+        name: e.name || "",
+        value: e.value || (e.valueFrom ? `from: ${e.valueFrom.configMapKeyRef?.name || e.valueFrom.secretKeyRef?.name || e.valueFrom.fieldRef?.fieldPath || "ref"}` : "──"),
+      }))
+
+      return {
+        name: c.name || "",
+        image: c.image || "",
+        command: c.command || [],
+        args: c.args || [],
+        ports,
+        cpuRequest: requests.cpu || "──",
+        cpuLimit: limits.cpu || "──",
+        memRequest: requests.memory || "──",
+        memLimit: limits.memory || "──",
+        livenessProbe: parseProbe(c.livenessProbe),
+        readinessProbe: parseProbe(c.readinessProbe),
+        env,
+      }
+    })
+
+    const containerStatuses = pod.status?.containerStatuses || []
+    const restarts = containerStatuses.reduce((sum: number, cs: any) => sum + (cs.restartCount || 0), 0)
+    const ready = containerStatuses.length > 0 && containerStatuses.every((cs: any) => cs.ready === true)
+
+    return {
+      name: pod.metadata?.name || "",
+      namespace: pod.metadata?.namespace || "",
+      labels: labelsStr || "──",
+      annotations: annotationsStr || "──",
+      created: formatAge(pod.metadata?.creationTimestamp || ""),
+      containers,
+      phase: pod.status?.phase || "Unknown",
+      podIP: pod.status?.podIP || "──",
+      hostIP: pod.status?.hostIP || "──",
+      restarts,
+      ready,
+      qosClass: pod.status?.qosClass || "──",
+      yaml: podYaml || "",
+    }
+  } catch {
+    return null
   }
 }

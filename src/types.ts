@@ -34,6 +34,8 @@ export interface NodeDetail {
   age: string
   podsUsed: number
   podsTotal: number
+  cpuAllocatable: number
+  memAllocatable: number
 }
 
 export interface PodDetail {
@@ -43,4 +45,35 @@ export interface PodDetail {
   cpu: string
   mem: string
   age: string
+}
+
+export interface PodContainer {
+  name: string
+  image: string
+  command: string[]
+  args: string[]
+  ports: string[]
+  cpuRequest: string
+  cpuLimit: string
+  memRequest: string
+  memLimit: string
+  livenessProbe: string
+  readinessProbe: string
+  env: { name: string; value: string }[]
+}
+
+export interface PodDetailFull {
+  name: string
+  namespace: string
+  labels: string
+  annotations: string
+  created: string
+  containers: PodContainer[]
+  phase: string
+  podIP: string
+  hostIP: string
+  restarts: number
+  ready: boolean
+  qosClass: string
+  yaml: string
 }

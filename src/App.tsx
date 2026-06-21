@@ -6,8 +6,10 @@ import { ClusterTable } from "./ClusterTable"
 import { ClusterOverview } from "./ClusterOverview"
 import { NodeTable } from "./NodeTable"
 import { NodeBars, PodTable } from "./NodeDetail"
-import { loadContextsAsync, getCurrentContext, switchContext, fetchClusterStatusAsync, fetchNodeDetailsAsync, fetchPodsForNodeAsync } from "./kube"
-import type { Cluster, KubeContext, MetricMode, NodeDetail, PodDetail } from "./types"
+import { PodSectionList, PodSectionDetail, buildSections, getDetailValue, getDetailRowCount } from "./PodDetailView"
+import { loadContextsAsync, getCurrentContext, switchContext, fetchClusterStatusAsync, fetchNodeDetailsAsync, fetchPodsForNodeAsync, fetchPodDetailAsync } from "./kube"
+import { copyToClipboard } from "./clipboard"
+import type { Cluster, KubeContext, MetricMode, NodeDetail, PodDetail, PodDetailFull } from "./types"
 
 type SortOrder = "none" | "asc" | "desc"
 
@@ -84,9 +86,21 @@ export function App({ renderer }: AppProps) {
   const [selectedNode, setSelectedNode] = useState<NodeDetail | null>(null)
   const [pods, setPods] = useState<PodDetail[]>([])
   const [podScrollOffset, setPodScrollOffset] = useState(0)
+  const [podListIndex, setPodListIndex] = useState(0)
   const [detailLoading, setDetailLoading] = useState(false)
   const [nodeLoading, setNodeLoading] = useState(false)
   const [metricMode, setMetricMode] = useState<MetricMode>("pct")
+
+  const [podView, setPodView] = useState(false)
+  const [selectedPod, setSelectedPod] = useState<PodDetail | null>(null)
+  const [podDetailFull, setPodDetailFull] = useState<PodDetailFull | null>(null)
+  const [podDetailLoading, setPodDetailLoading] = useState(false)
+  const [podSectionIndex, setPodSectionIndex] = useState(0)
+  const [podDetailScrollOffset, setPodDetailScrollOffset] = useState(0)
+  const [podDetailMode, setPodDetailMode] = useState<"sections" | "details">("sections")
+  const [detailRowIndex, setDetailRowIndex] = useState(0)
+  const [toastMessage, setToastMessage] = useState("")
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const spinnerRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -130,12 +144,20 @@ export function App({ renderer }: AppProps) {
     setLoading(true)
     setDetailView(false)
     setNodeView(false)
+    setPodView(false)
     setNodeDetails([])
     setSelectedNode(null)
     setPods([])
-    setNodeListIndex(0)
+    setPodListIndex(0)
     setNodeScrollOffset(0)
     setPodScrollOffset(0)
+    setSelectedPod(null)
+    setPodDetailFull(null)
+    setPodSectionIndex(0)
+    setPodDetailScrollOffset(0)
+    setPodDetailMode("sections")
+    setDetailRowIndex(0)
+    setToastMessage("")
     switchContext(ctxName)
     setCurrentContext(ctxName)
     const data = await fetchClusterStatusAsync(ctxName)
@@ -266,26 +288,111 @@ export function App({ renderer }: AppProps) {
         return
       }
 
+      if (podView) {
+        if (key.name === "escape") {
+          if (podDetailMode === "details") {
+            setPodDetailMode("sections")
+          } else {
+            setPodView(false)
+            setSelectedPod(null)
+            setPodDetailFull(null)
+            setPodSectionIndex(0)
+            setPodDetailScrollOffset(0)
+            setPodDetailMode("sections")
+            setDetailRowIndex(0)
+            setToastMessage("")
+          }
+        } else if (key.name === "return") {
+          if (podDetailMode === "sections") {
+            setPodDetailMode("details")
+            setDetailRowIndex(0)
+            setPodDetailScrollOffset(0)
+          } else if (podDetailFull) {
+            const value = getDetailValue(podDetailFull, podSectionIndex, detailRowIndex)
+            if (value) {
+              copyToClipboard(value)
+              setToastMessage("value copied to clipboard")
+              if (toastTimerRef.current) clearTimeout(toastTimerRef.current)
+              toastTimerRef.current = setTimeout(() => setToastMessage(""), 5000)
+            }
+          }
+        } else if (key.name === "up") {
+          if (podDetailMode === "sections") {
+            if (podSectionIndex > 0) {
+              setPodSectionIndex((i: number) => i - 1)
+              setPodDetailScrollOffset(0)
+            }
+          } else {
+            if (detailRowIndex > 0) {
+              setDetailRowIndex((i: number) => i - 1)
+              if (detailRowIndex <= podDetailScrollOffset) {
+                setPodDetailScrollOffset((i: number) => Math.max(0, i - 1))
+              }
+            }
+          }
+        } else if (key.name === "down") {
+          if (podDetailMode === "sections") {
+            if (podDetailFull) {
+              const maxSections = buildSections(podDetailFull).length
+              if (podSectionIndex < maxSections - 1) {
+                setPodSectionIndex((i: number) => i + 1)
+                setPodDetailScrollOffset(0)
+              }
+            }
+          } else if (podDetailFull) {
+            const maxRows = getDetailRowCount(podDetailFull, podSectionIndex)
+            if (maxRows > 0 && detailRowIndex < maxRows - 1) {
+              setDetailRowIndex((i: number) => i + 1)
+              const maxVisibleRows = Math.max(1, termHeight - 24)
+              if (detailRowIndex >= podDetailScrollOffset + maxVisibleRows - 1) {
+                setPodDetailScrollOffset((i: number) => i + 1)
+              }
+            }
+          }
+        } else if (key.name === "q") {
+          renderer.destroy()
+        }
+        return
+      }
+
       if (nodeView) {
         if (key.name === "escape") {
           setNodeView(false)
           setSelectedNode(null)
           setPods([])
+          setPodListIndex(0)
           setPodScrollOffset(0)
         } else if (key.name === "up") {
-          setPodScrollOffset((i: number) => Math.max(0, i - 1))
+          if (podListIndex > 0) {
+            setPodListIndex((i: number) => i - 1)
+            if (podListIndex <= podScrollOffset) {
+              setPodScrollOffset((i: number) => Math.max(0, i - 1))
+            }
+          }
         } else if (key.name === "down") {
-          const maxPodRows = Math.max(1, termHeight - 20)
-          setPodScrollOffset((i: number) =>
-            Math.min(Math.max(0, pods.length - maxPodRows), i + 1),
-          )
-        } else if (key.name === "c") {
-          if (contexts.length > 0) {
-            const curIdx = contexts.findIndex((c) => c.name === currentContext)
-            setContextSelectIndex(curIdx >= 0 ? curIdx : 0)
-            setContextSearch("")
-            setContextSearchCursor(0)
-            setContextModalOpen(true)
+          if (podListIndex < pods.length - 1) {
+            setPodListIndex((i: number) => i + 1)
+            const maxPodRows = Math.max(1, termHeight - 20)
+            if (podListIndex >= podScrollOffset + maxPodRows - 1) {
+              setPodScrollOffset((i: number) => i + 1)
+            }
+          }
+        } else if (key.name === "return") {
+          const pod = pods[podListIndex]
+          if (pod) {
+            setSelectedPod(pod)
+            setPodDetailFull(null)
+            setPodSectionIndex(0)
+            setPodDetailScrollOffset(0)
+            setPodDetailMode("sections")
+            setDetailRowIndex(0)
+            setToastMessage("")
+            setPodView(true)
+            setPodDetailLoading(true)
+            fetchPodDetailAsync(currentContext, pod.name, pod.namespace).then((detail) => {
+              setPodDetailFull(detail)
+              setPodDetailLoading(false)
+            })
           }
         } else if (key.name === "m") {
           setMetricMode((prev) => prev === "pct" ? "raw" : "pct")
@@ -320,6 +427,7 @@ export function App({ renderer }: AppProps) {
           if (node) {
             setSelectedNode(node)
             setPods([])
+            setPodListIndex(0)
             setPodScrollOffset(0)
             setNodeView(true)
             setNodeLoading(true)
@@ -327,14 +435,6 @@ export function App({ renderer }: AppProps) {
               setPods(podsList)
               setNodeLoading(false)
             })
-          }
-        } else if (key.name === "c") {
-          if (contexts.length > 0) {
-            const curIdx = contexts.findIndex((c) => c.name === currentContext)
-            setContextSelectIndex(curIdx >= 0 ? curIdx : 0)
-            setContextSearch("")
-            setContextSearchCursor(0)
-            setContextModalOpen(true)
           }
         } else if (key.name === "m") {
           setMetricMode((prev) => prev === "pct" ? "raw" : "pct")
@@ -397,12 +497,21 @@ export function App({ renderer }: AppProps) {
       searchMode,
       detailView,
       nodeView,
+      podView,
       nodeDetails,
       nodeListIndex,
       nodeScrollOffset,
       maxNodeRows,
-      pods.length,
+      pods,
+      podListIndex,
       podScrollOffset,
+      selectedPod,
+      podDetailFull,
+      podSectionIndex,
+      podDetailScrollOffset,
+      podDetailMode,
+      detailRowIndex,
+      toastMessage,
       contextModalOpen,
       filteredContexts,
       contextSelectIndex,
@@ -412,6 +521,7 @@ export function App({ renderer }: AppProps) {
       contexts,
       doContextSwitch,
       renderer,
+      termHeight,
     ],
   )
 
@@ -436,6 +546,9 @@ export function App({ renderer }: AppProps) {
 
   const headerContent = (() => {
     if (loading) {
+      if (podView && selectedPod && selectedNode && selectedCluster) {
+        return t`${fg("#8B949E")("k8s manager")}${fg("#484F58")(" | ")}${fg("#58A6FF")("context:")}${fg("#8B949E")(` ${currentContext} `)}${fg("#484F58")(" | ")}${fg("#58A6FF")("cluster:")}${fg("#8B949E")(` ${selectedCluster.name} `)}${fg("#484F58")(" | ")}${fg("#58A6FF")("node:")}${fg("#8B949E")(` ${selectedNode.name} `)}${fg("#484F58")(" | ")}${fg("#58A6FF")("pod:")}${fg("#8B949E")(` ${selectedPod.name} `)}${fg("#D29922")(spinner)}`
+      }
       if (nodeView && selectedNode && selectedCluster) {
         return t`${fg("#8B949E")("k8s manager")}${fg("#484F58")(" | ")}${fg("#58A6FF")("context:")}${fg("#8B949E")(` ${currentContext} `)}${fg("#484F58")(" | ")}${fg("#58A6FF")("cluster:")}${fg("#8B949E")(` ${selectedCluster.name} `)}${fg("#484F58")(" | ")}${fg("#58A6FF")("node:")}${fg("#8B949E")(` ${selectedNode.name} `)}${fg("#D29922")(spinner)}`
       }
@@ -443,6 +556,9 @@ export function App({ renderer }: AppProps) {
         return t`${fg("#8B949E")("k8s manager")}${fg("#484F58")(" | ")}${fg("#58A6FF")("context:")}${fg("#8B949E")(` ${currentContext} `)}${fg("#484F58")(" | ")}${fg("#58A6FF")("cluster:")}${fg("#8B949E")(` ${selectedCluster.name} `)}${fg("#D29922")(spinner)}`
       }
       return t`${fg("#8B949E")("k8s manager")}${fg("#484F58")(" | ")}${fg("#58A6FF")("context:")}${fg("#8B949E")(` ${currentContext} `)}${fg("#D29922")(spinner)}`
+    }
+    if (podView && selectedPod && selectedNode && selectedCluster) {
+      return t`${fg("#8B949E")("k8s manager")}${fg("#484F58")(" | ")}${fg("#58A6FF")("context:")}${fg("#8B949E")(` ${currentContext}`)}${fg("#484F58")(" | ")}${fg("#58A6FF")("cluster:")}${fg("#8B949E")(` ${selectedCluster.name}`)}${fg("#484F58")(" | ")}${fg("#58A6FF")("node:")}${fg("#8B949E")(` ${selectedNode.name}`)}${fg("#484F58")(" | ")}${fg("#58A6FF")("pod:")}${fg("#8B949E")(` ${selectedPod.name}`)}`
     }
     if (nodeView && selectedNode && selectedCluster) {
       return t`${fg("#8B949E")("k8s manager")}${fg("#484F58")(" | ")}${fg("#58A6FF")("context:")}${fg("#8B949E")(` ${currentContext}`)}${fg("#484F58")(" | ")}${fg("#58A6FF")("cluster:")}${fg("#8B949E")(` ${selectedCluster.name}`)}${fg("#484F58")(" | ")}${fg("#58A6FF")("node:")}${fg("#8B949E")(` ${selectedNode.name}`)}`
@@ -454,11 +570,17 @@ export function App({ renderer }: AppProps) {
   })()
 
   const commandsContent = (() => {
+    if (podView) {
+      if (podDetailMode === "sections") {
+        return t`${fg("#58A6FF")("[enter]")} open  ${fg("#58A6FF")("[↑↓]")} nav  ${fg("#58A6FF")("[esc]")} back  ${fg("#58A6FF")("[q]")}uit`
+      }
+      return t`${fg("#58A6FF")("[enter]")} copy  ${fg("#58A6FF")("[↑↓]")} scroll  ${fg("#58A6FF")("[esc]")} back  ${fg("#58A6FF")("[q]")}uit`
+    }
     if (nodeView) {
-      return t`${fg("#58A6FF")("[esc]")} back  ${fg("#58A6FF")("[m]")}etric  ${fg("#58A6FF")("[c]")}ontext  ${fg("#58A6FF")("[q]")}uit`
+      return t`${fg("#58A6FF")("[enter]")} pod  ${fg("#58A6FF")("[esc]")} back  ${fg("#58A6FF")("[m]")}etric  ${fg("#58A6FF")("[q]")}uit`
     }
     if (detailView) {
-      return t`${fg("#58A6FF")("[enter]")} node  ${fg("#58A6FF")("[esc]")} back  ${fg("#58A6FF")("[m]")}etric  ${fg("#58A6FF")("[c]")}ontext  ${fg("#58A6FF")("[q]")}uit`
+      return t`${fg("#58A6FF")("[enter]")} node  ${fg("#58A6FF")("[esc]")} back  ${fg("#58A6FF")("[m]")}etric  ${fg("#58A6FF")("[q]")}uit`
     }
     return t`${fg("#58A6FF")("[enter]")} open  ${fg("#58A6FF")("[s]")}ort  ${fg("#58A6FF")("[/]")}find  ${fg("#58A6FF")("[f]")}avorite  ${fg("#58A6FF")("[m]")}etric  ${fg("#58A6FF")("[c]")}ontext  ${fg("#58A6FF")("[q]")}uit`
   })()
@@ -510,10 +632,61 @@ export function App({ renderer }: AppProps) {
         </box>
       )}
 
-      {nodeView && selectedNode ? (
+      {podView && selectedPod ? (
+        <box style={{ flexDirection: "row", flexGrow: 1, width: "100%", gap: 0 }}>
+          <box
+            title="SECTIONS"
+            borderStyle="single"
+            borderColor={podDetailMode === "sections" ? "#58A6FF" : "#30363D"}
+            style={{ flexDirection: "column", width: 28 }}
+          >
+            {podDetailLoading ? (
+              <box style={{ flexDirection: "column", alignItems: "center", justifyContent: "center", flexGrow: 1 }}>
+                <text content={t`${fg("#D29922")(spinner)} ${fg("#8B949E")("Loading pod detail...")}`} />
+              </box>
+            ) : podDetailFull ? (
+              <PodSectionList pod={podDetailFull} selectedIndex={podSectionIndex} />
+            ) : (
+              <box style={{ flexDirection: "column", alignItems: "center", justifyContent: "center", flexGrow: 1 }}>
+                <text fg="#F85149" content="Failed to load pod detail" />
+              </box>
+            )}
+          </box>
+          <box
+            title="DETAILS"
+            borderStyle="single"
+            borderColor={podDetailMode === "details" ? "#58A6FF" : "#30363D"}
+            style={{ flexDirection: "column", flexGrow: 1 }}
+          >
+            {podDetailFull ? (
+              <PodSectionDetail pod={podDetailFull} sectionIndex={podSectionIndex} scrollOffset={podDetailScrollOffset} detailMode={podDetailMode === "details"} detailRowIndex={detailRowIndex} />
+            ) : null}
+          </box>
+          {toastMessage && (
+            <box
+              style={{
+                position: "absolute",
+                bottom: 2,
+                right: 1,
+                width: 26,
+                height: 3,
+                zIndex: 50,
+                backgroundColor: "#1A3A5C",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                paddingLeft: 1,
+                paddingRight: 1,
+              }}
+            >
+              <text fg="#E6EDF3" content={toastMessage} />
+            </box>
+          )}
+        </box>
+      ) : nodeView && selectedNode ? (
         <>
           <box
-            title={`NODE: ${selectedNode.name}`}
+            title={`OVERVIEW | ${selectedNode.name}`}
             borderStyle="single"
             borderColor="#30363D"
             style={{ flexDirection: "column", height: 7, width: "100%" }}
@@ -531,7 +704,7 @@ export function App({ renderer }: AppProps) {
                 <text content={t`${fg("#D29922")(spinner)} ${fg("#8B949E")("Loading pod data...")}`} />
               </box>
             ) : (
-              <PodTable pods={pods} scrollOffset={podScrollOffset} loading={false} />
+              <PodTable pods={pods} scrollOffset={podScrollOffset} loading={false} metricMode={metricMode} cpuAllocatable={selectedNode.cpuAllocatable} memAllocatable={selectedNode.memAllocatable} selectedIndex={podListIndex} />
             )}
           </box>
         </>
@@ -604,7 +777,7 @@ export function App({ renderer }: AppProps) {
         </box>
       )}
 
-      {!detailView && !nodeView && (
+      {!detailView && !nodeView && !podView && (
         <box
           title="LEGENDS"
           borderStyle="single"
