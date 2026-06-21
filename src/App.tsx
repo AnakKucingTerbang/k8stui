@@ -310,13 +310,13 @@ export function App({ renderer }: AppProps) {
   const searchDisplay = t`${fg("#58A6FF")("filter: ")}${fg("#E6EDF3")(searchBeforeCursor)}${fg("#58A6FF")(searchAtCursor || "█")}${fg("#E6EDF3")(searchAfterCursor)}`
 
   const headerContent = loading
-    ? t`${fg("#8B949E")("k8s cluster manager")}${fg("#484F58")(" | ")}${fg("#58A6FF")("context:")}${fg("#8B949E")(` ${currentContext} `)}${fg("#D29922")(spinner)}`
-    : t`${fg("#8B949E")("k8s cluster manager")}${fg("#484F58")(" | ")}${fg("#58A6FF")("context:")}${fg("#8B949E")(` ${currentContext}`)}`
+    ? t`${fg("#8B949E")("k8s manager")}${fg("#484F58")(" | ")}${fg("#58A6FF")("context:")}${fg("#8B949E")(` ${currentContext} `)}${fg("#D29922")(spinner)}`
+    : t`${fg("#8B949E")("k8s manager")}${fg("#484F58")(" | ")}${fg("#58A6FF")("context:")}${fg("#8B949E")(` ${currentContext}`)}`
 
   return (
     <box style={{ flexDirection: "column", width: "100%", height: "100%", gap: 0 }}>
       <box
-        title="KUBESHELL"
+        title="K8STUI"
         borderStyle="single"
         borderColor="#30363D"
         style={{
