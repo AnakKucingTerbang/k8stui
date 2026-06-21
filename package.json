@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "description": "Opinionated terminal UI for managing Kubernetes clusters",
   "module": "src/index.tsx",
-  "bin": "src/cli.ts",
+  "bin": "dist/cli.js",
   "scripts": {
     "start": "bun run src/index.tsx"
   },
@@ -23,7 +23,8 @@
   },
   "license": "Apache-2.0",
   "files": [
-    "src/"
+    "src/",
+    "dist/"
   ],
   "devDependencies": {
     "@types/bun": "latest",
