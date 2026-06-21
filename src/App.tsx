@@ -2,12 +2,11 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { useRenderer } from "@opentui/react"
 import type { CliRenderer } from "@opentui/core"
 import { HeaderBar, buildBreadcrumbParts } from "./components/HeaderBar"
-import { CommandsBar } from "./components/CommandsBar"
 import { ClusterListPage } from "./pages/ClusterListPage"
 import { ClusterDetailPage } from "./pages/ClusterDetailPage"
 import { NodeDetailPage } from "./pages/NodeDetailPage"
 import { PodDetailPage } from "./pages/PodDetailPage"
-import type { PodDetailMode } from "./pages/PodDetailPage"
+import type { Cluster, KubeContext, MetricMode, NodeDetail, PodDetail, PodDetailFull } from "./types"
 import {
   loadContextsAsync,
   getCurrentContext,
@@ -17,7 +16,6 @@ import {
   fetchPodsForNodeAsync,
   fetchPodDetailAsync,
 } from "./kube"
-import type { Cluster, KubeContext, MetricMode, NodeDetail, PodDetail, PodDetailFull } from "./types"
 
 type Page = "cluster-list" | "cluster-detail" | "node-detail" | "pod-detail"
 
@@ -59,7 +57,6 @@ export function App({ renderer }: AppProps) {
   const [selectedPod, setSelectedPod] = useState<PodDetail | null>(null)
   const [podDetailFull, setPodDetailFull] = useState<PodDetailFull | null>(null)
   const [podDetailLoading, setPodDetailLoading] = useState(false)
-  const [podDetailMode, setPodDetailMode] = useState<PodDetailMode>("sections")
 
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const spinnerRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -99,7 +96,6 @@ export function App({ renderer }: AppProps) {
     setPods([])
     setSelectedPod(null)
     setPodDetailFull(null)
-    setPodDetailMode("sections")
     switchContext(ctxName)
     setCurrentContext(ctxName)
     const data = await fetchClusterStatusAsync(ctxName)
@@ -173,7 +169,6 @@ export function App({ renderer }: AppProps) {
   const handleOpenPod = useCallback((pod: PodDetail) => {
     setSelectedPod(pod)
     setPodDetailFull(null)
-    setPodDetailMode("sections")
     setPodDetailLoading(true)
     setPage("pod-detail")
     fetchPodDetailAsync(currentContext, pod.name, pod.namespace).then((detail) => {
@@ -186,7 +181,6 @@ export function App({ renderer }: AppProps) {
     if (page === "pod-detail") {
       setSelectedPod(null)
       setPodDetailFull(null)
-      setPodDetailMode("sections")
       setPage("node-detail")
     } else if (page === "node-detail") {
       setSelectedNode(null)
@@ -274,8 +268,6 @@ export function App({ renderer }: AppProps) {
           onQuit={handleQuit}
         />
       )}
-
-      <CommandsBar page={page} podDetailMode={podDetailMode} />
     </box>
   )
 }

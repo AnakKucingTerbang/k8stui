@@ -1,7 +1,8 @@
-import { useCallback, useState } from "react"
+import { useCallback, useMemo, useState } from "react"
 import { useKeyboard, useTerminalDimensions } from "@opentui/react"
 import { t, fg } from "@opentui/core"
 import { ClusterTable } from "../components/ClusterTable"
+import { CommandsBar } from "../components/CommandsBar"
 import { LegendsBar } from "../components/LegendsBar"
 import { SearchBar } from "../components/SearchBar"
 import { ContextModal } from "../components/ContextModal"
@@ -217,6 +218,8 @@ export function ClusterListPage({
 
   useKeyboard(handleKey)
 
+  const commands = useMemo(() => t`${fg("#58A6FF")("[enter]")} open  ${fg("#58A6FF")("[s]")}ort  ${fg("#58A6FF")("[/]")}find  ${fg("#58A6FF")("[f]")}avorite  ${fg("#58A6FF")("[m]")}etric  ${fg("#58A6FF")("[c]")}ontext  ${fg("#58A6FF")("[q]")}uit`, [])
+
   return (
     <>
       {searchMode && (
@@ -261,6 +264,8 @@ export function ClusterListPage({
       </box>
 
       <LegendsBar />
+
+      <CommandsBar content={commands} />
 
       {contextModalOpen && (
         <ContextModal

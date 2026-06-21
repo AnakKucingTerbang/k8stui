@@ -1,6 +1,7 @@
-import { useCallback, useRef, useState } from "react"
+import { useCallback, useMemo, useRef, useState } from "react"
 import { useKeyboard, useTerminalDimensions } from "@opentui/react"
 import { t, fg } from "@opentui/core"
+import { CommandsBar } from "../components/CommandsBar"
 import { PodSectionList, PodSectionDetail, buildSections, getDetailValue, getDetailRowCount } from "../components/PodDetailView"
 import { Toast } from "../components/Toast"
 import { copyToClipboard } from "../clipboard"
@@ -43,12 +44,16 @@ export function PodDetailPage({
         } else {
           onBack()
         }
-      } else if (key.name === "return") {
+      } else if (key.name === "tab") {
         if (podDetailMode === "sections") {
           setPodDetailMode("details")
           setDetailRowIndex(0)
           setPodDetailScrollOffset(0)
-        } else if (podDetailFull) {
+        } else {
+          setPodDetailMode("sections")
+        }
+      } else if (key.name === "return") {
+        if (podDetailMode === "details" && podDetailFull) {
           const value = getDetailValue(podDetailFull, podSectionIndex, detailRowIndex)
           if (value) {
             copyToClipboard(value)
@@ -107,6 +112,13 @@ export function PodDetailPage({
 
   useKeyboard(handleKey)
 
+  const commands = useMemo(() => {
+    if (podDetailMode === "details") {
+      return t`${fg("#58A6FF")("[enter]")} copy  ${fg("#58A6FF")("[tab]")} toggle focus  ${fg("#58A6FF")("[↑↓]")} scroll  ${fg("#58A6FF")("[esc]")} back  ${fg("#58A6FF")("[q]")}uit`
+    }
+    return t`${fg("#58A6FF")("[tab]")} toggle focus  ${fg("#58A6FF")("[↑↓]")} nav  ${fg("#58A6FF")("[esc]")} back  ${fg("#58A6FF")("[q]")}uit`
+  }, [podDetailMode])
+
   return (
     <>
       <box style={{ flexDirection: "row", flexGrow: 1, width: "100%", gap: 0 }}>
@@ -146,6 +158,8 @@ export function PodDetailPage({
         </box>
         <Toast message={toastMessage} />
       </box>
+
+      <CommandsBar content={commands} />
     </>
   )
 }

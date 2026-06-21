@@ -1,6 +1,7 @@
-import { useCallback, useState } from "react"
+import { useCallback, useMemo, useState } from "react"
 import { useKeyboard, useTerminalDimensions } from "@opentui/react"
 import { t, fg } from "@opentui/core"
+import { CommandsBar } from "../components/CommandsBar"
 import { NodeBars, PodTable } from "../components/NodeDetail"
 import type { NodeDetail, PodDetail, MetricMode } from "../types"
 
@@ -67,6 +68,8 @@ export function NodeDetailPage({
 
   useKeyboard(handleKey)
 
+  const commands = useMemo(() => t`${fg("#58A6FF")("[enter]")} pod  ${fg("#58A6FF")("[esc]")} back  ${fg("#58A6FF")("[m]")}etric  ${fg("#58A6FF")("[q]")}uit`, [])
+
   return (
     <>
       <box
@@ -99,6 +102,8 @@ export function NodeDetailPage({
           />
         )}
       </box>
+
+      <CommandsBar content={commands} />
     </>
   )
 }

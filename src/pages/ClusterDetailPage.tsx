@@ -1,7 +1,8 @@
-import { useCallback, useState } from "react"
+import { useCallback, useMemo, useState } from "react"
 import { useKeyboard, useTerminalDimensions } from "@opentui/react"
 import { t, fg } from "@opentui/core"
 import { ClusterOverview } from "../components/ClusterOverview"
+import { CommandsBar } from "../components/CommandsBar"
 import { NodeTable } from "../components/NodeTable"
 import type { Cluster, NodeDetail, MetricMode } from "../types"
 
@@ -68,6 +69,8 @@ export function ClusterDetailPage({
 
   useKeyboard(handleKey)
 
+  const commands = useMemo(() => t`${fg("#58A6FF")("[enter]")} node  ${fg("#58A6FF")("[esc]")} back  ${fg("#58A6FF")("[m]")}etric  ${fg("#58A6FF")("[q]")}uit`, [])
+
   const visibleNodes = nodeDetails.slice(nodeScrollOffset, nodeScrollOffset + maxNodeRows)
 
   return (
@@ -99,6 +102,8 @@ export function ClusterDetailPage({
           />
         )}
       </box>
+
+      <CommandsBar content={commands} />
     </>
   )
 }
