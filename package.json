@@ -1,11 +1,30 @@
 {
-  "name": "k8cli",
+  "name": "k8stui",
+  "version": "0.1.0",
+  "description": "Opinionated terminal UI for managing Kubernetes clusters",
   "module": "src/index.tsx",
+  "bin": "src/cli.ts",
   "scripts": {
     "start": "bun run src/index.tsx"
   },
   "type": "module",
-  "private": true,
+  "keywords": [
+    "kubernetes",
+    "k8s",
+    "tui",
+    "terminal",
+    "cli",
+    "kubectl",
+    "dashboard"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/AnakKucingTerbang/k8stui.git"
+  },
+  "license": "Apache-2.0",
+  "files": [
+    "src/"
+  ],
   "devDependencies": {
     "@types/bun": "latest",
     "@types/react": "^19.2.17"
