@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/react"
-import { t, fg, bold } from "@opentui/core"
+import { t, fg } from "@opentui/core"
 import type { CliRenderer } from "@opentui/core"
 import { ClusterTable } from "./ClusterTable"
-import { loadContextsAsync, getCurrentContext, switchContext, fetchClusterStatusAsync } from "./kube"
-import type { Cluster, KubeContext } from "./types"
+import { ClusterOverview } from "./ClusterOverview"
+import { NodeTable } from "./NodeTable"
+import { NodeBars, PodTable } from "./NodeDetail"
+import { loadContextsAsync, getCurrentContext, switchContext, fetchClusterStatusAsync, fetchNodeDetailsAsync, fetchPodsForNodeAsync } from "./kube"
+import type { Cluster, KubeContext, MetricMode, NodeDetail, PodDetail } from "./types"
 
 type SortOrder = "none" | "asc" | "desc"
 
@@ -72,6 +75,19 @@ export function App({ renderer }: AppProps) {
   const [loading, setLoading] = useState(true)
   const [spinnerFrame, setSpinnerFrame] = useState(0)
 
+  const [detailView, setDetailView] = useState(false)
+  const [nodeDetails, setNodeDetails] = useState<NodeDetail[]>([])
+  const [nodeListIndex, setNodeListIndex] = useState(0)
+  const [nodeScrollOffset, setNodeScrollOffset] = useState(0)
+
+  const [nodeView, setNodeView] = useState(false)
+  const [selectedNode, setSelectedNode] = useState<NodeDetail | null>(null)
+  const [pods, setPods] = useState<PodDetail[]>([])
+  const [podScrollOffset, setPodScrollOffset] = useState(0)
+  const [detailLoading, setDetailLoading] = useState(false)
+  const [nodeLoading, setNodeLoading] = useState(false)
+  const [metricMode, setMetricMode] = useState<MetricMode>("pct")
+
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const spinnerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
@@ -112,6 +128,14 @@ export function App({ renderer }: AppProps) {
 
   const doContextSwitch = useCallback(async (ctxName: string) => {
     setLoading(true)
+    setDetailView(false)
+    setNodeView(false)
+    setNodeDetails([])
+    setSelectedNode(null)
+    setPods([])
+    setNodeListIndex(0)
+    setNodeScrollOffset(0)
+    setPodScrollOffset(0)
     switchContext(ctxName)
     setCurrentContext(ctxName)
     const data = await fetchClusterStatusAsync(ctxName)
@@ -165,6 +189,8 @@ export function App({ renderer }: AppProps) {
   useEffect(() => {
     setSelectedIndex(0)
   }, [searchQuery, sortOrder])
+
+  const maxNodeRows = Math.max(1, termHeight - 20)
 
   const handleKey = useCallback(
     (key: { name: string; ctrl?: boolean; sequence?: string }) => {
@@ -240,11 +266,100 @@ export function App({ renderer }: AppProps) {
         return
       }
 
+      if (nodeView) {
+        if (key.name === "escape") {
+          setNodeView(false)
+          setSelectedNode(null)
+          setPods([])
+          setPodScrollOffset(0)
+        } else if (key.name === "up") {
+          setPodScrollOffset((i: number) => Math.max(0, i - 1))
+        } else if (key.name === "down") {
+          const maxPodRows = Math.max(1, termHeight - 20)
+          setPodScrollOffset((i: number) =>
+            Math.min(Math.max(0, pods.length - maxPodRows), i + 1),
+          )
+        } else if (key.name === "c") {
+          if (contexts.length > 0) {
+            const curIdx = contexts.findIndex((c) => c.name === currentContext)
+            setContextSelectIndex(curIdx >= 0 ? curIdx : 0)
+            setContextSearch("")
+            setContextSearchCursor(0)
+            setContextModalOpen(true)
+          }
+        } else if (key.name === "m") {
+          setMetricMode((prev) => prev === "pct" ? "raw" : "pct")
+        } else if (key.name === "q") {
+          renderer.destroy()
+        }
+        return
+      }
+
+      if (detailView) {
+        if (key.name === "escape") {
+          setDetailView(false)
+          setNodeDetails([])
+          setNodeListIndex(0)
+          setNodeScrollOffset(0)
+        } else if (key.name === "up") {
+          if (nodeListIndex > 0) {
+            setNodeListIndex((i: number) => i - 1)
+            if (nodeListIndex <= nodeScrollOffset) {
+              setNodeScrollOffset((i: number) => Math.max(0, i - 1))
+            }
+          }
+        } else if (key.name === "down") {
+          if (nodeListIndex < nodeDetails.length - 1) {
+            setNodeListIndex((i: number) => i + 1)
+            if (nodeListIndex >= nodeScrollOffset + maxNodeRows - 1) {
+              setNodeScrollOffset((i: number) => i + 1)
+            }
+          }
+        } else if (key.name === "return") {
+          const node = nodeDetails[nodeListIndex]
+          if (node) {
+            setSelectedNode(node)
+            setPods([])
+            setPodScrollOffset(0)
+            setNodeView(true)
+            setNodeLoading(true)
+            fetchPodsForNodeAsync(currentContext, node.name).then((podsList) => {
+              setPods(podsList)
+              setNodeLoading(false)
+            })
+          }
+        } else if (key.name === "c") {
+          if (contexts.length > 0) {
+            const curIdx = contexts.findIndex((c) => c.name === currentContext)
+            setContextSelectIndex(curIdx >= 0 ? curIdx : 0)
+            setContextSearch("")
+            setContextSearchCursor(0)
+            setContextModalOpen(true)
+          }
+        } else if (key.name === "m") {
+          setMetricMode((prev) => prev === "pct" ? "raw" : "pct")
+        } else if (key.name === "q") {
+          renderer.destroy()
+        }
+        return
+      }
+
       if (key.name === "up") {
         setSelectedIndex((i: number) => Math.max(0, i - 1))
       } else if (key.name === "down") {
         setSelectedIndex((i: number) => Math.min(displayed.length - 1, i + 1))
       } else if (key.name === "return") {
+          if (selectedCluster) {
+            setNodeDetails([])
+            setNodeListIndex(0)
+            setNodeScrollOffset(0)
+            setDetailView(true)
+            setDetailLoading(true)
+            fetchNodeDetailsAsync(currentContext).then((nodes) => {
+              setNodeDetails(nodes)
+              setDetailLoading(false)
+            })
+          }
       } else if (key.name === "q") {
         renderer.destroy()
       } else if (key.name === "s") {
@@ -272,12 +387,22 @@ export function App({ renderer }: AppProps) {
           setContextSearchCursor(0)
           setContextModalOpen(true)
         }
+      } else if (key.name === "m") {
+        setMetricMode((prev) => prev === "pct" ? "raw" : "pct")
       }
     },
     [
       displayed.length,
       selectedCluster,
       searchMode,
+      detailView,
+      nodeView,
+      nodeDetails,
+      nodeListIndex,
+      nodeScrollOffset,
+      maxNodeRows,
+      pods.length,
+      podScrollOffset,
       contextModalOpen,
       filteredContexts,
       contextSelectIndex,
@@ -298,20 +423,47 @@ export function App({ renderer }: AppProps) {
   const modalTop = Math.floor((termHeight - modalHeight) / 2)
 
   const maxVisible = 5
-  const scrollOffset = Math.max(
+  const ctxScrollOffset = Math.max(
     0,
     Math.min(contextSelectIndex, filteredContexts.length - maxVisible),
   )
-  const visibleContexts = filteredContexts.slice(scrollOffset, scrollOffset + maxVisible)
+  const visibleContexts = filteredContexts.slice(ctxScrollOffset, ctxScrollOffset + maxVisible)
 
   const searchBeforeCursor = contextSearch.slice(0, contextSearchCursor)
   const searchAtCursor = contextSearch.slice(contextSearchCursor, contextSearchCursor + 1)
   const searchAfterCursor = contextSearch.slice(contextSearchCursor + 1)
   const searchDisplay = t`${fg("#58A6FF")("filter: ")}${fg("#E6EDF3")(searchBeforeCursor)}${fg("#58A6FF")(searchAtCursor || "█")}${fg("#E6EDF3")(searchAfterCursor)}`
 
-  const headerContent = loading
-    ? t`${fg("#8B949E")("k8s manager")}${fg("#484F58")(" | ")}${fg("#58A6FF")("context:")}${fg("#8B949E")(` ${currentContext} `)}${fg("#D29922")(spinner)}`
-    : t`${fg("#8B949E")("k8s manager")}${fg("#484F58")(" | ")}${fg("#58A6FF")("context:")}${fg("#8B949E")(` ${currentContext}`)}`
+  const headerContent = (() => {
+    if (loading) {
+      if (nodeView && selectedNode && selectedCluster) {
+        return t`${fg("#8B949E")("k8s manager")}${fg("#484F58")(" | ")}${fg("#58A6FF")("context:")}${fg("#8B949E")(` ${currentContext} `)}${fg("#484F58")(" | ")}${fg("#58A6FF")("cluster:")}${fg("#8B949E")(` ${selectedCluster.name} `)}${fg("#484F58")(" | ")}${fg("#58A6FF")("node:")}${fg("#8B949E")(` ${selectedNode.name} `)}${fg("#D29922")(spinner)}`
+      }
+      if (detailView && selectedCluster) {
+        return t`${fg("#8B949E")("k8s manager")}${fg("#484F58")(" | ")}${fg("#58A6FF")("context:")}${fg("#8B949E")(` ${currentContext} `)}${fg("#484F58")(" | ")}${fg("#58A6FF")("cluster:")}${fg("#8B949E")(` ${selectedCluster.name} `)}${fg("#D29922")(spinner)}`
+      }
+      return t`${fg("#8B949E")("k8s manager")}${fg("#484F58")(" | ")}${fg("#58A6FF")("context:")}${fg("#8B949E")(` ${currentContext} `)}${fg("#D29922")(spinner)}`
+    }
+    if (nodeView && selectedNode && selectedCluster) {
+      return t`${fg("#8B949E")("k8s manager")}${fg("#484F58")(" | ")}${fg("#58A6FF")("context:")}${fg("#8B949E")(` ${currentContext}`)}${fg("#484F58")(" | ")}${fg("#58A6FF")("cluster:")}${fg("#8B949E")(` ${selectedCluster.name}`)}${fg("#484F58")(" | ")}${fg("#58A6FF")("node:")}${fg("#8B949E")(` ${selectedNode.name}`)}`
+    }
+    if (detailView && selectedCluster) {
+      return t`${fg("#8B949E")("k8s manager")}${fg("#484F58")(" | ")}${fg("#58A6FF")("context:")}${fg("#8B949E")(` ${currentContext}`)}${fg("#484F58")(" | ")}${fg("#58A6FF")("cluster:")}${fg("#8B949E")(` ${selectedCluster.name}`)}`
+    }
+    return t`${fg("#8B949E")("k8s manager")}${fg("#484F58")(" | ")}${fg("#58A6FF")("context:")}${fg("#8B949E")(` ${currentContext}`)}`
+  })()
+
+  const commandsContent = (() => {
+    if (nodeView) {
+      return t`${fg("#58A6FF")("[esc]")} back  ${fg("#58A6FF")("[m]")}etric  ${fg("#58A6FF")("[c]")}ontext  ${fg("#58A6FF")("[q]")}uit`
+    }
+    if (detailView) {
+      return t`${fg("#58A6FF")("[enter]")} node  ${fg("#58A6FF")("[esc]")} back  ${fg("#58A6FF")("[m]")}etric  ${fg("#58A6FF")("[c]")}ontext  ${fg("#58A6FF")("[q]")}uit`
+    }
+    return t`${fg("#58A6FF")("[enter]")} open  ${fg("#58A6FF")("[s]")}ort  ${fg("#58A6FF")("[/]")}find  ${fg("#58A6FF")("[f]")}avorite  ${fg("#58A6FF")("[m]")}etric  ${fg("#58A6FF")("[c]")}ontext  ${fg("#58A6FF")("[q]")}uit`
+  })()
+
+  const visibleNodes = nodeDetails.slice(nodeScrollOffset, nodeScrollOffset + maxNodeRows)
 
   return (
     <box style={{ flexDirection: "column", width: "100%", height: "100%", gap: 0 }}>
@@ -358,58 +510,118 @@ export function App({ renderer }: AppProps) {
         </box>
       )}
 
-      <box
-        title="CLUSTER"
-        borderStyle="single"
-        borderColor="#30363D"
-        style={{
-          flexDirection: "column",
-          flexGrow: 1,
-          width: "100%",
-        }}
-      >
-        {loading ? (
-          <box style={{ flexDirection: "column", alignItems: "center", justifyContent: "center", flexGrow: 1 }}>
-            <text content={t`${fg("#D29922")(spinner)} ${fg("#8B949E")("Loading cluster data...")}`} />
-            <text fg="#484F58" content={`Connecting to ${currentContext || "cluster"}...`} />
+      {nodeView && selectedNode ? (
+        <>
+          <box
+            title={`NODE: ${selectedNode.name}`}
+            borderStyle="single"
+            borderColor="#30363D"
+            style={{ flexDirection: "column", height: 7, width: "100%" }}
+          >
+            <NodeBars node={selectedNode} metricMode={metricMode} />
           </box>
-        ) : displayed.length > 0 ? (
-          <ClusterTable
-            clusters={displayed}
-            selectedIndex={selectedIndex}
-            sortOrder={sortOrder}
-            favorites={favorites}
-          />
-        ) : (
-          <box style={{ flexDirection: "column", alignItems: "center", justifyContent: "center", flexGrow: 1 }}>
-            <text fg="#8B949E" content="No clusters found" />
-            {searchQuery ? (
-              <text fg="#484F58" content={`No clusters match "${searchQuery}"`} />
-            ) : contexts.length === 0 ? (
-              <text fg="#484F58" content="No kubeconfig at ~/.kube/config" />
+          <box
+            title="PODS"
+            borderStyle="single"
+            borderColor="#30363D"
+            style={{ flexDirection: "column", flexGrow: 1, width: "100%" }}
+          >
+            {nodeLoading ? (
+              <box style={{ flexDirection: "column", alignItems: "center", justifyContent: "center", flexGrow: 1 }}>
+                <text content={t`${fg("#D29922")(spinner)} ${fg("#8B949E")("Loading pod data...")}`} />
+              </box>
             ) : (
-              <text fg="#484F58" content="No contexts configured" />
+              <PodTable pods={pods} scrollOffset={podScrollOffset} loading={false} />
             )}
           </box>
-        )}
-      </box>
+        </>
+      ) : detailView && selectedCluster ? (
+        <>
+          <box
+            title="OVERVIEW"
+            borderStyle="single"
+            borderColor="#30363D"
+            style={{ flexDirection: "column", height: 7, width: "100%" }}
+          >
+            <ClusterOverview cluster={selectedCluster} metricMode={metricMode} />
+          </box>
+          <box
+            title="NODES"
+            borderStyle="single"
+            borderColor="#30363D"
+            style={{ flexDirection: "column", flexGrow: 1, width: "100%" }}
+          >
+            {detailLoading ? (
+              <box style={{ flexDirection: "column", alignItems: "center", justifyContent: "center", flexGrow: 1 }}>
+                <text content={t`${fg("#D29922")(spinner)} ${fg("#8B949E")("Loading node data...")}`} />
+              </box>
+            ) : (
+              <NodeTable
+                nodes={visibleNodes}
+                selectedIndex={nodeListIndex}
+                scrollOffset={nodeScrollOffset}
+                metricMode={metricMode}
+              />
+            )}
+          </box>
+        </>
+      ) : (
+        <box
+          title="CLUSTER"
+          borderStyle="single"
+          borderColor="#30363D"
+          style={{
+            flexDirection: "column",
+            flexGrow: 1,
+            width: "100%",
+          }}
+        >
+          {loading ? (
+            <box style={{ flexDirection: "column", alignItems: "center", justifyContent: "center", flexGrow: 1 }}>
+              <text content={t`${fg("#D29922")(spinner)} ${fg("#8B949E")("Loading cluster data...")}`} />
+              <text fg="#484F58" content={`Connecting to ${currentContext || "cluster"}...`} />
+            </box>
+          ) : displayed.length > 0 ? (
+            <ClusterTable
+              clusters={displayed}
+              selectedIndex={selectedIndex}
+              sortOrder={sortOrder}
+              favorites={favorites}
+              metricMode={metricMode}
+            />
+          ) : (
+            <box style={{ flexDirection: "column", alignItems: "center", justifyContent: "center", flexGrow: 1 }}>
+              <text fg="#8B949E" content="No clusters found" />
+              {searchQuery ? (
+                <text fg="#484F58" content={`No clusters match "${searchQuery}"`} />
+              ) : contexts.length === 0 ? (
+                <text fg="#484F58" content="No kubeconfig at ~/.kube/config" />
+              ) : (
+                <text fg="#484F58" content="No contexts configured" />
+              )}
+            </box>
+          )}
+        </box>
+      )}
 
-      <box
-        title="LEGENDS"
-        borderStyle="single"
-        borderColor="#30363D"
-        style={{
-          flexDirection: "row",
-          gap: 2,
-          height: 3,
-          paddingLeft: 1,
-          alignItems: "center",
-        }}
-      >
-        <text content={t`${fg("#3FB950")("●")} connected`} fg="#8B949E" />
-        <text content={t`${fg("#D29922")("▲")} degraded`} fg="#8B949E" />
-        <text content={t`${fg("#F85149")("○")} unreachable`} fg="#8B949E" />
-      </box>
+      {!detailView && !nodeView && (
+        <box
+          title="LEGENDS"
+          borderStyle="single"
+          borderColor="#30363D"
+          style={{
+            flexDirection: "row",
+            gap: 2,
+            height: 3,
+            paddingLeft: 1,
+            alignItems: "center",
+          }}
+        >
+          <text content={t`${fg("#3FB950")("●")} connected`} fg="#8B949E" />
+          <text content={t`${fg("#D29922")("▲")} degraded`} fg="#8B949E" />
+          <text content={t`${fg("#F85149")("○")} unreachable`} fg="#8B949E" />
+        </box>
+      )}
 
       <box
         title="COMMANDS"
@@ -422,10 +634,7 @@ export function App({ renderer }: AppProps) {
           alignItems: "center",
         }}
       >
-        <text
-          fg="#8B949E"
-          content={t`${fg("#58A6FF")("[enter]")} open  ${fg("#58A6FF")("[s]")}ort  ${fg("#58A6FF")("[/]")}find  ${fg("#58A6FF")("[f]")}avorite  ${fg("#58A6FF")("[c]")}ontext  ${fg("#58A6FF")("[q]")}uit`}
-        />
+        <text fg="#8B949E" content={commandsContent} />
       </box>
 
       {contextModalOpen && (
@@ -458,7 +667,7 @@ export function App({ renderer }: AppProps) {
             </box>
           ) : (
             visibleContexts.map((ctx, vi) => {
-              const realIndex = scrollOffset + vi
+              const realIndex = ctxScrollOffset + vi
               const isSelected = realIndex === contextSelectIndex
               const isCurrent = ctx.name === currentContext
               const bgColor = isSelected ? "#1A3A5C" : undefined
