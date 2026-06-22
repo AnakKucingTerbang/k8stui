@@ -702,7 +702,6 @@ export async function fetchPodDetailAsync(
   ])
 
   let appResources: ApplicationResource[] = []
-  let combinedOriginalYaml = ""
 
   try {
     const pod = JSON.parse(podJson)
@@ -809,7 +808,6 @@ export async function fetchPodDetailAsync(
       qosClass: pod.status?.qosClass || "──",
       yaml: podYaml || "",
       appResources: [],
-      combinedOriginalYaml: "",
       ownerKind: ownerResult.ownerKind,
       ownerName: ownerResult.ownerName,
     }
@@ -832,22 +830,24 @@ export async function fetchPodDetailAsync(
     ])
     appResources = [...appResources, ...pvcResources, ...secretResources, ...cmResources]
 
-    const yamls = appResources.filter((r) => r.lastAppliedYaml).map((r) => r.lastAppliedYaml)
-    if (yamls.length > 0) {
-      combinedOriginalYaml = yamls.join("\n---\n")
-    }
-
-    if (!combinedOriginalYaml && ownerResult.ownerJson) {
+    if (!existingKeys.has(`${ownerResult.ownerKind}/${ownerResult.ownerName}`) && ownerResult.ownerJson) {
       try {
         const ownerObj = JSON.parse(ownerResult.ownerJson)
         const lastApplied = ownerObj.metadata?.annotations?.["kubectl.kubernetes.io/last-applied-configuration"]
         if (lastApplied) {
-          combinedOriginalYaml = dump(JSON.parse(lastApplied), { lineWidth: -1, noRefs: true })
+          const lastAppliedYaml = dump(JSON.parse(lastApplied), { lineWidth: -1, noRefs: true })
+          appResources.push({
+            kind: ownerResult.ownerKind,
+            name: ownerResult.ownerName,
+            namespace,
+            lastAppliedYaml,
+            summaryRows: buildSummaryRows(ownerResult.ownerKind, ownerObj),
+          })
         }
       } catch {}
     }
 
-    return { ...basicResult, appResources, combinedOriginalYaml }
+    return { ...basicResult, appResources }
   } catch {
     return null
   }

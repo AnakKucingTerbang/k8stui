@@ -4,7 +4,7 @@ import { t, fg, bold } from "@opentui/core"
 import { PodHeader } from "../components/PodHeader"
 import { ContainersBox } from "../components/ContainersBox"
 import { ApplicationBox } from "../components/ApplicationBox"
-import { ManifestsBox } from "../components/ManifestsBox"
+import { ManifestsBox, type ManifestItem } from "../components/ManifestsBox"
 import { DetailsPanel, getSelectedRowDisplay } from "../components/DetailsPanel"
 import { CommandsBar } from "../components/CommandsBar"
 import { Toast } from "../components/Toast"
@@ -63,6 +63,20 @@ function buildContainerRows(container: PodContainer): DetailRow[] {
   return rows
 }
 
+function shortKind(kind: string): string {
+  switch (kind) {
+    case "Deployment": return "Deploy"
+    case "StatefulSet": return "Sts"
+    case "DaemonSet": return "DS"
+    case "PersistentVolumeClaim": return "PVC"
+    case "ConfigMap": return "CM"
+    case "Secret": return "Secret"
+    case "Service": return "SVC"
+    case "Ingress": return "Ingress"
+    default: return kind
+  }
+}
+
 interface PodDetailPageProps {
   pod: PodDetail
   podDetailFull: PodDetailFull | null
@@ -89,6 +103,12 @@ export function PodDetailPage({
   const [containerIndex, setContainerIndex] = useState(0)
   const [appResourceIndex, setAppResourceIndex] = useState(0)
   const [manifestIndex, setManifestIndex] = useState(0)
+
+  useEffect(() => {
+    setContainerIndex(0)
+    setAppResourceIndex(0)
+    setManifestIndex(0)
+  }, [pod.name])
   const [detailScrollOffset, setDetailScrollOffset] = useState(0)
   const [detailRowIndex, setDetailRowIndex] = useState(-1)
   const [yamlEditMode, setYamlEditMode] = useState<YamlEditMode>("view")
@@ -125,10 +145,19 @@ export function PodDetailPage({
   const { height: termHeight } = useTerminalDimensions()
   const maxVisibleRows = Math.max(1, termHeight - 24)
 
-  const hasOriginalManifest = !!(podDetailFull?.combinedOriginalYaml)
-  const manifestItems: string[] = []
-  if (hasOriginalManifest) manifestItems.push("original")
-  manifestItems.push("live")
+  const manifestItems: ManifestItem[] = useMemo(() => {
+    if (!podDetailFull) return []
+    const items: ManifestItem[] = []
+    for (const r of podDetailFull.appResources) {
+      if (r.lastAppliedYaml) {
+        items.push({ label: `${shortKind(r.kind)}: ${r.name}`, hasYaml: true })
+      }
+    }
+    items.push({ label: "Live Manifest", hasYaml: true })
+    return items
+  }, [podDetailFull])
+
+  const isLiveManifest = manifestIndex === manifestItems.length - 1
 
   const containerRefNames = useMemo(() => {
     if (!podDetailFull || podDetailFull.containers.length === 0) {
@@ -155,14 +184,14 @@ export function PodDetailPage({
 
   const detailsYaml = useMemo((): string | undefined => {
     if (lastLeftBox !== "manifests" || !podDetailFull) return undefined
-    if (manifestIndex === 0 && hasOriginalManifest) return podDetailFull.combinedOriginalYaml
-    if (manifestIndex === manifestItems.length - 1) return podDetailFull.yaml
-    return undefined
-  }, [podDetailFull, lastLeftBox, manifestIndex, hasOriginalManifest, manifestItems.length])
+    if (manifestItems.length === 0) return undefined
+    if (isLiveManifest) return podDetailFull.yaml
+    const r = podDetailFull.appResources.filter(r => r.lastAppliedYaml)[manifestIndex]
+    return r?.lastAppliedYaml || undefined
+  }, [podDetailFull, lastLeftBox, manifestIndex, manifestItems.length, isLiveManifest])
 
   const isYamlDetails = detailsYaml !== undefined
-  const isOriginalYaml = lastLeftBox === "manifests" && manifestIndex === 0 && hasOriginalManifest
-  const canEdit = isOriginalYaml && yamlEditMode === "view"
+  const canEdit = lastLeftBox === "manifests" && !isLiveManifest && detailsYaml !== undefined && yamlEditMode === "view"
 
   const activeYaml = useMemo(() => {
     if (yamlEditMode === "edit") return editedYaml || detailsYaml || ""
@@ -350,10 +379,22 @@ export function PodDetailPage({
     if (focus !== "details") setYamlEditMode("view")
   }, [focus])
 
+  useEffect(() => {
+    const max = manifestItems.length - 1
+    if (manifestIndex > max && max >= 0) setManifestIndex(max)
+  }, [manifestItems.length, manifestIndex])
+
+  const editingLabel = useMemo(() => {
+    if (lastLeftBox !== "manifests" || !podDetailFull) return `${podDetailFull?.ownerKind || ""}/${podDetailFull?.ownerName || ""}`
+    if (isLiveManifest) return "pod"
+    const r = podDetailFull.appResources.filter(r => r.lastAppliedYaml)[manifestIndex]
+    return r ? `${r.kind}: ${r.name}` : ""
+  }, [lastLeftBox, podDetailFull, manifestIndex, isLiveManifest])
+
   const selectedDisplay = useMemo(() => {
     if (isYamlDetails) {
       if (yamlEditMode === "edit") {
-        return t`${fg("#F85149")("editing")} ${fg("#8B949E")(`${podDetailFull?.ownerKind || ""}/${podDetailFull?.ownerName || ""}`)}`
+        return t`${fg("#F85149")("editing")} ${fg("#8B949E")(editingLabel)}`
       }
       return DASH
     }
@@ -397,7 +438,7 @@ export function PodDetailPage({
 
   const detailsTitle = useMemo(() => {
     if (yamlEditMode === "edit") {
-      return `EDITING: ${podDetailFull?.ownerKind || ""}/${podDetailFull?.ownerName || ""}`
+      return `EDITING: ${editingLabel}`
     }
     if (lastLeftBox === "containers") {
       const name = podDetailFull?.containers[containerIndex]?.name || ""
@@ -408,11 +449,13 @@ export function PodDetailPage({
       return r ? `${r.kind}: ${r.name}` : "APPLICATION"
     }
     if (lastLeftBox === "manifests") {
-      if (manifestIndex === 0 && hasOriginalManifest) return "ORIGINAL MANIFEST"
-      return "LIVE MANIFEST"
+      if (manifestItems.length === 0) return "MANIFESTS"
+      if (isLiveManifest) return "LIVE MANIFEST"
+      const item = manifestItems[manifestIndex]
+      return item?.label || "MANIFEST"
     }
     return "DETAILS"
-  }, [yamlEditMode, lastLeftBox, podDetailFull, containerIndex, appResourceIndex, manifestIndex, hasOriginalManifest])
+  }, [yamlEditMode, lastLeftBox, podDetailFull, containerIndex, appResourceIndex, manifestIndex, manifestItems, isLiveManifest, editingLabel])
 
   return (
     <>
@@ -438,7 +481,7 @@ export function PodDetailPage({
           />
 
           <ManifestsBox
-            hasOriginal={hasOriginalManifest}
+            items={manifestItems}
             selectedIndex={manifestIndex}
             focused={leftBoxFocused("manifests")}
             loading={loading}
@@ -457,7 +500,7 @@ export function PodDetailPage({
               rows={detailsRows}
               yaml={detailsYaml}
               yamlMode={yamlEditMode}
-              editEnabled={isOriginalYaml}
+              editEnabled={canEdit}
               scrollOffset={detailScrollOffset}
               detailRowIndex={detailRowIndex}
               scrollRef={yamlScrollRef}

@@ -96,7 +96,6 @@ export interface PodDetailFull {
   qosClass: string
   yaml: string
   appResources: ApplicationResource[]
-  combinedOriginalYaml: string
   ownerKind: string
   ownerName: string
 }
