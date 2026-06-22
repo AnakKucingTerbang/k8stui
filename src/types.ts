@@ -60,6 +60,25 @@ export interface PodContainer {
   livenessProbe: string
   readinessProbe: string
   env: { name: string; value: string }[]
+  volumeMountNames: string[]
+  pvcRefNames: string[]
+  secretRefNames: string[]
+  configMapRefNames: string[]
+}
+
+export interface DetailRow {
+  key: string
+  value: string
+  isParent?: boolean
+  indent?: boolean
+}
+
+export interface ApplicationResource {
+  kind: string
+  name: string
+  namespace: string
+  lastAppliedYaml: string
+  summaryRows: DetailRow[]
 }
 
 export interface PodDetailFull {
@@ -76,4 +95,8 @@ export interface PodDetailFull {
   ready: boolean
   qosClass: string
   yaml: string
+  appResources: ApplicationResource[]
+  combinedOriginalYaml: string
+  ownerKind: string
+  ownerName: string
 }

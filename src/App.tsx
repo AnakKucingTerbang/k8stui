@@ -171,11 +171,27 @@ export function App({ renderer }: AppProps) {
     setPodDetailFull(null)
     setPodDetailLoading(true)
     setPage("pod-detail")
-    fetchPodDetailAsync(currentContext, pod.name, pod.namespace).then((detail) => {
-      setPodDetailFull(detail)
+    fetchPodDetailAsync(currentContext, pod.name, pod.namespace, (partial) => {
+      setPodDetailFull(partial)
       setPodDetailLoading(false)
+    }).then((detail) => {
+      setPodDetailFull(detail)
     })
   }, [currentContext])
+
+  const handleRefreshPodDetail = useCallback(() => {
+    if (!selectedPod || !currentContext) return
+    fetchPodDetailAsync(currentContext, selectedPod.name, selectedPod.namespace, (partial) => {
+      setPodDetailFull(partial)
+    }).then((detail) => {
+      setPodDetailFull(detail)
+    })
+    if (selectedNode) {
+      fetchPodsForNodeAsync(currentContext, selectedNode.name).then((podsList) => {
+        setPods(podsList)
+      })
+    }
+  }, [currentContext, selectedPod, selectedNode])
 
   const handleBack = useCallback(() => {
     if (page === "pod-detail") {
@@ -263,9 +279,10 @@ export function App({ renderer }: AppProps) {
           pod={selectedPod}
           podDetailFull={podDetailFull}
           loading={podDetailLoading}
-          spinner={spinner}
           onBack={handleBack}
           onQuit={handleQuit}
+          onRefresh={handleRefreshPodDetail}
+          contextName={currentContext}
         />
       )}
     </box>

@@ -1,5 +1,6 @@
 import { exec, execSync } from "child_process"
-import type { Cluster, ClusterStatus, KubeContext, NodeDetail, PodDetail, PodDetailFull, PodContainer } from "./types"
+import { dump } from "js-yaml"
+import type { Cluster, ClusterStatus, KubeContext, NodeDetail, PodDetail, PodDetailFull, PodContainer, ApplicationResource, DetailRow } from "./types"
 
 function kubectlAsync(args: string, timeout = 5000): Promise<string> {
   return new Promise((resolve) => {
@@ -402,46 +403,340 @@ function parseProbe(probe: any): string {
   return "──"
 }
 
-export async function fetchPodDetailAsync(contextName: string, podName: string, namespace: string): Promise<PodDetailFull | null> {
-  const [podJson, podYaml] = await Promise.all([
-    kubectlContextAsync(
-      contextName,
-      `get pod ${podName} -n ${namespace} -o json`,
-      5000,
-    ),
-    kubectlContextAsync(
-      contextName,
-      `get pod ${podName} -n ${namespace} -o yaml`,
-      5000,
-    ),
-  ])
+const DASH = "──"
 
-  if (!podJson) return null
+function val(s: string): string {
+  return s || DASH
+}
+
+function buildSummaryRows(kind: string, obj: any): DetailRow[] {
+  const rows: DetailRow[] = []
+  const meta = obj.metadata || {}
+  const labels = meta.labels || {}
+
+  rows.push({ key: "Kind", value: kind })
+  rows.push({ key: "Name", value: val(meta.name) })
+  rows.push({ key: "Namespace", value: val(obj.metadata?.namespace) })
+
+  const labelEntries = Object.entries(labels)
+  if (labelEntries.length === 0) {
+    rows.push({ key: "Labels", value: DASH })
+  } else {
+    rows.push({ key: "Labels", value: "", isParent: true })
+    for (const [k, v] of labelEntries) {
+      rows.push({ key: k, value: v as string, indent: true })
+    }
+  }
+
+  rows.push({ key: "Created", value: meta.creationTimestamp ? formatAge(meta.creationTimestamp) : DASH })
+
+  switch (kind) {
+    case "Deployment":
+    case "StatefulSet": {
+      const spec = obj.spec || {}
+      rows.push({ key: "Replicas", value: `${spec.replicas ?? DASH}` })
+      if (kind === "Deployment") rows.push({ key: "Strategy", value: val(spec.strategy?.type) })
+      if (kind === "StatefulSet") rows.push({ key: "Service Name", value: val(spec.serviceName) })
+      const selector = spec.selector?.matchLabels || {}
+      const selEntries = Object.entries(selector)
+      if (selEntries.length > 0) {
+        rows.push({ key: "Selector", value: "", isParent: true })
+        for (const [k, v] of selEntries) {
+          rows.push({ key: k, value: v as string, indent: true })
+        }
+      }
+      break
+    }
+    case "DaemonSet": {
+      const selector = obj.spec?.selector?.matchLabels || {}
+      const selEntries = Object.entries(selector)
+      if (selEntries.length > 0) {
+        rows.push({ key: "Selector", value: "", isParent: true })
+        for (const [k, v] of selEntries) {
+          rows.push({ key: k, value: v as string, indent: true })
+        }
+      }
+      break
+    }
+    case "PersistentVolumeClaim": {
+      const spec = obj.spec || {}
+      const status = obj.status || {}
+      const accessModes = (spec.accessModes || []).join(", ")
+      rows.push({ key: "Access Modes", value: val(accessModes) })
+      rows.push({ key: "Storage", value: val(spec.resources?.requests?.storage) })
+      rows.push({ key: "Status", value: val(status.phase) })
+      rows.push({ key: "Volume Name", value: val(status.accessModes?.length ? status.capacity?.storage : spec.volumeName) })
+      break
+    }
+    case "Secret": {
+      rows.push({ key: "Type", value: val(obj.type) })
+      const dataKeys = Object.keys(obj.data || {}).join(", ")
+      rows.push({ key: "Data Keys", value: val(dataKeys) })
+      break
+    }
+    case "ConfigMap": {
+      const dataKeys = Object.keys(obj.data || {}).join(", ")
+      rows.push({ key: "Data Keys", value: val(dataKeys) })
+      break
+    }
+    case "Service": {
+      const spec = obj.spec || {}
+      rows.push({ key: "Type", value: val(spec.type) })
+      rows.push({ key: "Cluster IP", value: val(spec.clusterIP) })
+      const ports = (spec.ports || []).map((p: any) => `${p.port}/${p.protocol || "TCP"}`).join(", ")
+      rows.push({ key: "Ports", value: val(ports) })
+      break
+    }
+    case "Ingress": {
+      const spec = obj.spec || {}
+      const rules = spec.rules || []
+      if (rules.length > 0) {
+        const hosts = rules.map((r: any) => r.host || "*").join(", ")
+        rows.push({ key: "Hosts", value: val(hosts) })
+      }
+      break
+    }
+  }
+
+  return rows
+}
+
+async function resolveOwnerAsync(
+  contextName: string,
+  podName: string,
+  namespace: string,
+  podJsonPreloaded?: string,
+): Promise<{ ownerKind: string; ownerName: string; ownerJson: string; labelSelector: string }> {
+  const empty = { ownerKind: "", ownerName: "", ownerJson: "", labelSelector: "" }
+
+  const podJson = podJsonPreloaded ?? await kubectlContextAsync(
+    contextName,
+    `get pod ${podName} -n ${namespace} -o json`,
+    5000,
+  )
+  if (!podJson) return empty
 
   try {
     const pod = JSON.parse(podJson)
+    const refs: any[] = pod.metadata?.ownerReferences || []
+    if (refs.length === 0) return empty
 
-    const labels = pod.metadata?.labels || {}
-    const labelsArr = Object.entries(labels).map(([k, v]) => `${k}=${v}`)
+    let ownerKind = refs[0].kind || ""
+    let ownerName = refs[0].name || ""
 
-    const annotations = pod.metadata?.annotations || {}
-    const annotationsArr = Object.entries(annotations).map(([k, v]) => `${k}=${v}`)
+    if (ownerKind === "ReplicaSet") {
+      const rsJson = await kubectlContextAsync(
+        contextName,
+        `get replicaset ${ownerName} -n ${namespace} -o json`,
+        5000,
+      )
+      if (rsJson) {
+        try {
+          const rs = JSON.parse(rsJson)
+          const rsRefs: any[] = rs.metadata?.ownerReferences || []
+          if (rsRefs.length > 0) {
+            ownerKind = rsRefs[0].kind || ownerKind
+            ownerName = rsRefs[0].name || ownerName
+          }
+        } catch {}
+      }
+    }
 
-    const containers: PodContainer[] = (pod.spec?.containers || []).map((c: any): PodContainer => {
+    const kindLower = ownerKind.toLowerCase()
+    const ownerResourceJson = await kubectlContextAsync(
+      contextName,
+      `get ${kindLower} ${ownerName} -n ${namespace} -o json`,
+      5000,
+    )
+    if (!ownerResourceJson) return { ownerKind, ownerName, ownerJson: "", labelSelector: "" }
+
+    try {
+      const ownerObj = JSON.parse(ownerResourceJson)
+      const matchLabels = ownerObj.spec?.selector?.matchLabels || {}
+      const labelSelector = Object.entries(matchLabels).map(([k, v]) => `${k}=${v}`).join(",")
+      return { ownerKind, ownerName, ownerJson: ownerResourceJson, labelSelector }
+    } catch {
+      return { ownerKind, ownerName, ownerJson: "", labelSelector: "" }
+    }
+  } catch {
+    return empty
+  }
+}
+
+export async function fetchApplicationResourcesAsync(
+  contextName: string,
+  namespace: string,
+  labelSelector: string,
+): Promise<ApplicationResource[]> {
+  if (!labelSelector) return []
+
+  const resourcesJson = await kubectlContextAsync(
+    contextName,
+    `get deploy,statefulset,daemonset,pvc,configmap,secret,service,ingress -l ${labelSelector} -n ${namespace} -o json`,
+    8000,
+  )
+  if (!resourcesJson) return []
+
+  try {
+    const data = JSON.parse(resourcesJson)
+    const items: any[] = data.items || []
+    return items.map((item: any): ApplicationResource => {
+      const kind = item.kind || ""
+      const name = item.metadata?.name || ""
+      const ns = item.metadata?.namespace || namespace
+      const lastApplied = item.metadata?.annotations?.["kubectl.kubernetes.io/last-applied-configuration"]
+      let lastAppliedYaml = ""
+      if (lastApplied) {
+        try {
+          lastAppliedYaml = dump(JSON.parse(lastApplied), { lineWidth: -1, noRefs: true })
+        } catch {}
+      }
+      return {
+        kind,
+        name,
+        namespace: ns,
+        lastAppliedYaml,
+        summaryRows: buildSummaryRows(kind, item),
+      }
+    })
+  } catch {
+    return []
+  }
+}
+
+export async function applyYamlAsync(
+  contextName: string,
+  yamlContent: string,
+): Promise<{ success: boolean; message: string }> {
+  return new Promise((resolve) => {
+    const proc = exec(
+      `kubectl --context=${contextName} apply -f -`,
+      { encoding: "utf8", timeout: 10000 },
+      (err, stdout, stderr) => {
+        if (err) {
+          const msg = (stderr || err.message || "unknown error").trim()
+          resolve({ success: false, message: msg })
+        } else {
+          resolve({ success: true, message: stdout.trim() })
+        }
+      },
+    )
+    if (proc.stdin) {
+      proc.stdin.write(yamlContent)
+      proc.stdin.end()
+    }
+  })
+}
+
+async function fetchResourcesByNamesAsync(
+  contextName: string,
+  namespace: string,
+  kind: string,
+  names: string[],
+): Promise<ApplicationResource[]> {
+  if (names.length === 0) return []
+  const kindFlag = kind === "PersistentVolumeClaim" ? "pvc" : kind.toLowerCase()
+  const json = await kubectlContextAsync(
+    contextName,
+    `get ${kindFlag} ${names.join(",")} -n ${namespace} -o json`,
+    5000,
+  )
+  if (!json) return []
+  try {
+    const data = JSON.parse(json)
+    const items: any[] = data.items || []
+    return items.map((item: any): ApplicationResource => {
+      const k = item.kind || kind
+      const n = item.metadata?.name || ""
+      const lastApplied = item.metadata?.annotations?.["kubectl.kubernetes.io/last-applied-configuration"]
+      let lastAppliedYaml = ""
+      if (lastApplied) {
+        try { lastAppliedYaml = dump(JSON.parse(lastApplied), { lineWidth: -1, noRefs: true }) } catch {}
+      }
+      return { kind: k, name: n, namespace, lastAppliedYaml, summaryRows: buildSummaryRows(k, item) }
+    })
+  } catch {
+    return []
+  }
+}
+
+export async function fetchPodDetailAsync(
+  contextName: string,
+  podName: string,
+  namespace: string,
+  onBasicData?: (partial: PodDetailFull) => void,
+): Promise<PodDetailFull | null> {
+  const podJson = await kubectlContextAsync(contextName, `get pod ${podName} -n ${namespace} -o json`, 5000)
+  if (!podJson) return null
+
+  const [podYaml, ownerResult] = await Promise.all([
+    kubectlContextAsync(contextName, `get pod ${podName} -n ${namespace} -o yaml`, 5000),
+    resolveOwnerAsync(contextName, podName, namespace, podJson),
+  ])
+
+  let appResources: ApplicationResource[] = []
+  let combinedOriginalYaml = ""
+
+  try {
+    const pod = JSON.parse(podJson)
+    const podSpec = pod.spec || {}
+    const podVolumes: any[] = podSpec.volumes || []
+
+    const volumePvcMap: Record<string, string> = {}
+    const volumeSecretMap: Record<string, string> = {}
+    const volumeCmMap: Record<string, string> = {}
+    const allPvcNames: string[] = []
+    const allSecretNames: string[] = []
+    const allCmNames: string[] = []
+
+    for (const vol of podVolumes) {
+      const vName = vol.name || ""
+      if (vol.persistentVolumeClaim?.claimName) {
+        volumePvcMap[vName] = vol.persistentVolumeClaim.claimName
+        if (!allPvcNames.includes(vol.persistentVolumeClaim.claimName)) allPvcNames.push(vol.persistentVolumeClaim.claimName)
+      }
+      if (vol.secret?.secretName) {
+        volumeSecretMap[vName] = vol.secret.secretName
+        if (!allSecretNames.includes(vol.secret.secretName)) allSecretNames.push(vol.secret.secretName)
+      }
+      if (vol.configMap?.name) {
+        volumeCmMap[vName] = vol.configMap.name
+        if (!allCmNames.includes(vol.configMap.name)) allCmNames.push(vol.configMap.name)
+      }
+    }
+
+    const containers: PodContainer[] = (podSpec.containers || []).map((c: any): PodContainer => {
       const resources = c.resources || {}
       const requests = resources.requests || {}
       const limits = resources.limits || {}
 
-      const ports = (c.ports || []).map((p: any) => {
-        const port = p.containerPort || ""
-        const proto = p.protocol || "TCP"
-        return `${port}/${proto}`
-      })
+      const ports = (c.ports || []).map((p: any) => `${p.containerPort || ""}/${p.protocol || "TCP"}`)
 
       const env: { name: string; value: string }[] = (c.env || []).map((e: any) => ({
         name: e.name || "",
         value: e.value || (e.valueFrom ? `from: ${e.valueFrom.configMapKeyRef?.name || e.valueFrom.secretKeyRef?.name || e.valueFrom.fieldRef?.fieldPath || "ref"}` : "──"),
       }))
+
+      const volumeMountNames: string[] = (c.volumeMounts || []).map((vm: any) => vm.name || "")
+
+      const pvcRefNames: string[] = []
+      const secretRefNames: string[] = []
+      const configMapRefNames: string[] = []
+
+      for (const vmName of volumeMountNames) {
+        if (volumePvcMap[vmName] && !pvcRefNames.includes(volumePvcMap[vmName])) pvcRefNames.push(volumePvcMap[vmName])
+        if (volumeSecretMap[vmName] && !secretRefNames.includes(volumeSecretMap[vmName])) secretRefNames.push(volumeSecretMap[vmName])
+        if (volumeCmMap[vmName] && !configMapRefNames.includes(volumeCmMap[vmName])) configMapRefNames.push(volumeCmMap[vmName])
+      }
+
+      for (const e of (c.env || [])) {
+        if (e.valueFrom?.secretKeyRef?.name && !secretRefNames.includes(e.valueFrom.secretKeyRef.name)) secretRefNames.push(e.valueFrom.secretKeyRef.name)
+        if (e.valueFrom?.configMapKeyRef?.name && !configMapRefNames.includes(e.valueFrom.configMapKeyRef.name)) configMapRefNames.push(e.valueFrom.configMapKeyRef.name)
+      }
+      for (const ef of (c.envFrom || [])) {
+        if (ef.secretRef?.name && !secretRefNames.includes(ef.secretRef.name)) secretRefNames.push(ef.secretRef.name)
+        if (ef.configMapRef?.name && !configMapRefNames.includes(ef.configMapRef.name)) configMapRefNames.push(ef.configMapRef.name)
+      }
 
       return {
         name: c.name || "",
@@ -456,14 +751,23 @@ export async function fetchPodDetailAsync(contextName: string, podName: string, 
         livenessProbe: parseProbe(c.livenessProbe),
         readinessProbe: parseProbe(c.readinessProbe),
         env,
+        volumeMountNames,
+        pvcRefNames,
+        secretRefNames,
+        configMapRefNames,
       }
     })
+
+    const labels = pod.metadata?.labels || {}
+    const labelsArr = Object.entries(labels).map(([k, v]) => `${k}=${v}`)
+    const annotations = pod.metadata?.annotations || {}
+    const annotationsArr = Object.entries(annotations).map(([k, v]) => `${k}=${v}`)
 
     const containerStatuses = pod.status?.containerStatuses || []
     const restarts = containerStatuses.reduce((sum: number, cs: any) => sum + (cs.restartCount || 0), 0)
     const ready = containerStatuses.length > 0 && containerStatuses.every((cs: any) => cs.ready === true)
 
-    return {
+    const basicResult: PodDetailFull = {
       name: pod.metadata?.name || "",
       namespace: pod.metadata?.namespace || "",
       labels: labelsArr.length > 0 ? labelsArr : ["──"],
@@ -477,7 +781,46 @@ export async function fetchPodDetailAsync(contextName: string, podName: string, 
       ready,
       qosClass: pod.status?.qosClass || "──",
       yaml: podYaml || "",
+      appResources: [],
+      combinedOriginalYaml: "",
+      ownerKind: ownerResult.ownerKind,
+      ownerName: ownerResult.ownerName,
     }
+
+    onBasicData?.(basicResult)
+
+    if (ownerResult.labelSelector) {
+      appResources = await fetchApplicationResourcesAsync(contextName, namespace, ownerResult.labelSelector)
+    }
+
+    const existingKeys = new Set(appResources.map((r) => `${r.kind}/${r.name}`))
+    const missingPvcs = allPvcNames.filter((n) => !existingKeys.has(`PersistentVolumeClaim/${n}`))
+    const missingSecrets = allSecretNames.filter((n) => !existingKeys.has(`Secret/${n}`))
+    const missingCms = allCmNames.filter((n) => !existingKeys.has(`ConfigMap/${n}`))
+
+    const [pvcResources, secretResources, cmResources] = await Promise.all([
+      fetchResourcesByNamesAsync(contextName, namespace, "PersistentVolumeClaim", missingPvcs),
+      fetchResourcesByNamesAsync(contextName, namespace, "Secret", missingSecrets),
+      fetchResourcesByNamesAsync(contextName, namespace, "ConfigMap", missingCms),
+    ])
+    appResources = [...appResources, ...pvcResources, ...secretResources, ...cmResources]
+
+    const yamls = appResources.filter((r) => r.lastAppliedYaml).map((r) => r.lastAppliedYaml)
+    if (yamls.length > 0) {
+      combinedOriginalYaml = yamls.join("\n---\n")
+    }
+
+    if (!combinedOriginalYaml && ownerResult.ownerJson) {
+      try {
+        const ownerObj = JSON.parse(ownerResult.ownerJson)
+        const lastApplied = ownerObj.metadata?.annotations?.["kubectl.kubernetes.io/last-applied-configuration"]
+        if (lastApplied) {
+          combinedOriginalYaml = dump(JSON.parse(lastApplied), { lineWidth: -1, noRefs: true })
+        }
+      } catch {}
+    }
+
+    return { ...basicResult, appResources, combinedOriginalYaml }
   } catch {
     return null
   }
