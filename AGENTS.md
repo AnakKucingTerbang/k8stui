@@ -44,6 +44,34 @@ Key helpers: `renderOnce()`, `flush()`, `waitFor(predicate)`, `waitForFrame(pred
 | `SHOW_CONSOLE=true` | Open built-in console overlay at startup |
 | `OTUI_USE_CONSOLE=false` | Disable global `console.*` capture |
 
+## Versioning
+
+Uses `release-it` + `@release-it/conventional-changelog` (Angular preset).
+
+- Release command: `bunx release-it` (interactive) or `bunx release-it patch/minor/major`
+- What it does: bumps `package.json`, updates `CHANGELOG.md`, git commit + tag, pushes, publishes to npm
+- No GitHub Releases — only git tags + npm publish
+
+### Conventional Commits
+
+All commit messages follow `type(scope): description` format:
+
+- `feat:` → **minor** bump (new feature)
+- `fix:` → **patch** bump (bug fix)
+- `feat!:`, `fix!:`, or `BREAKING CHANGE:` in footer → **major** bump
+- `chore:`, `docs:`, `refactor:`, `style:`, `test:` → no version bump (housekeeping in changelog)
+
+When told to commit, infer the conventional type from the change and format the message accordingly. Examples:
+- Added a new page → `feat(pages): add pod logs view`
+- Fixed a crash → `fix(kube): handle empty context list`
+- Removed unused dep → `chore: remove unused @kubernetes/client-node`
+- Updated AGENTS.md → `docs: add versioning and commit conventions`
+
+## Rules
+
+- **NEVER** run `git add`, `git commit`, `git push`, `npm publish`, or any write git/npm command unless the user explicitly says to
+- When told to commit, write the message in conventional commit format based on the nature of the change
+
 ## Reference
 
 OpenTUI docs are installed at `.agents/skills/opentui/docs/`. Key entry points:
