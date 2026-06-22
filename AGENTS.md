@@ -51,6 +51,7 @@ Uses `release-it` + `@release-it/conventional-changelog` (Angular preset).
 - Release command: `bunx release-it` (interactive) or `bunx release-it patch/minor/major`
 - What it does: bumps `package.json`, updates `CHANGELOG.md`, git commit + tag, pushes, publishes to npm
 - No GitHub Releases — only git tags + npm publish
+- **Release must be run by the user** — npm 2FA (auth-and-writes) requires an interactive OTP prompt, so `bunx release-it` cannot be run by the agent. When changes are ready for release, remind the user to run `bunx release-it` or `bunx release-it patch/minor/major` themselves.
 
 ### Conventional Commits
 
@@ -71,6 +72,7 @@ When told to commit, infer the conventional type from the change and format the 
 
 - **NEVER** run `git add`, `git commit`, `git push`, `npm publish`, or any write git/npm command unless the user explicitly says to
 - When told to commit, write the message in conventional commit format based on the nature of the change
+- When changes are ready for a release, remind the user to run `bunx release-it` themselves (npm 2FA requires their OTP)
 
 ## Reference
 

@@ -72,8 +72,7 @@ ensure_kubectl() {
   warn "kubectl is not installed."
   warn "k8stui requires kubectl to communicate with your cluster."
   warn "Install kubectl: https://kubernetes.io/docs/tasks/tools/"
-  error "Cannot continue without kubectl."
-  exit 1
+  warn "Continuing install — k8stui will show a message when run without kubectl."
 }
 
 create_wrapper() {
@@ -112,6 +111,33 @@ update_path() {
 
   export PATH="${INSTALL_DIR}:${PATH}"
 }
+
+uninstall() {
+  info "k8stui uninstaller"
+  info "=================="
+  echo ""
+
+  if [ -f "${WRAPPER}" ]; then
+    rm -f "${WRAPPER}"
+    ok "Removed ${WRAPPER}"
+  else
+    warn "Wrapper script not found at ${WRAPPER}"
+  fi
+
+  echo ""
+  ok "Uninstall complete!"
+  echo ""
+  info "Note: ${INSTALL_DIR} was left on your PATH (other tools may use it)."
+  info "To remove it manually, edit your shell rc file and delete the line:"
+  info "  export PATH=\"\${HOME}/.local/bin:\${PATH}\""
+  echo ""
+}
+
+if [ "${1:-}" = "--uninstall" ]; then
+  echo ""
+  uninstall
+  exit 0
+fi
 
 echo ""
 info "k8stui installer"

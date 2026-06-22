@@ -44,9 +44,17 @@ k8stui
 The installer will:
 
 - Check for Bun (offer to install if missing)
-- Check for kubectl (exit if missing)
+- Check for kubectl (warn if missing, continue anyway)
 - Create `~/.local/bin/k8stui` wrapper script
 - Add `~/.local/bin` to your PATH if needed
+
+### Uninstall
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/AnakKucingTerbang/k8stui/main/install.sh | bash -s -- --uninstall
+```
+
+This removes the `~/.local/bin/k8stui` wrapper. The PATH entry is left alone (other tools may use `~/.local/bin`).
 
 ## Usage
 

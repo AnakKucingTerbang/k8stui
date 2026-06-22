@@ -1,6 +1,6 @@
 {
   "name": "k8stui",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Opinionated terminal UI for managing Kubernetes clusters",
   "module": "src/index.tsx",
   "bin": {
