@@ -3,7 +3,9 @@
   "version": "0.1.0",
   "description": "Opinionated terminal UI for managing Kubernetes clusters",
   "module": "src/index.tsx",
-  "bin": "dist/cli.js",
+  "bin": {
+    "k8stui": "dist/cli.js"
+  },
   "scripts": {
     "start": "bun run src/index.tsx",
     "release": "release-it"
