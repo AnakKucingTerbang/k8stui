@@ -636,28 +636,55 @@ async function fetchResourcesByNamesAsync(
 ): Promise<ApplicationResource[]> {
   if (names.length === 0) return []
   const kindFlag = kind === "PersistentVolumeClaim" ? "pvc" : kind.toLowerCase()
+
   const json = await kubectlContextAsync(
     contextName,
-    `get ${kindFlag} ${names.join(",")} -n ${namespace} -o json`,
+    `get ${kindFlag} ${names.join(",")} -n ${namespace} -o json --ignore-not-found`,
     5000,
   )
-  if (!json) return []
-  try {
-    const data = JSON.parse(json)
-    const items: any[] = data.items || []
-    return items.map((item: any): ApplicationResource => {
-      const k = item.kind || kind
-      const n = item.metadata?.name || ""
-      const lastApplied = item.metadata?.annotations?.["kubectl.kubernetes.io/last-applied-configuration"]
-      let lastAppliedYaml = ""
-      if (lastApplied) {
-        try { lastAppliedYaml = dump(JSON.parse(lastApplied), { lineWidth: -1, noRefs: true }) } catch {}
+  if (json) {
+    try {
+      const data = JSON.parse(json)
+      const items: any[] = data.items || []
+      if (items.length > 0) {
+        return items.map((item: any): ApplicationResource => {
+          const k = item.kind || kind
+          const n = item.metadata?.name || ""
+          const lastApplied = item.metadata?.annotations?.["kubectl.kubernetes.io/last-applied-configuration"]
+          let lastAppliedYaml = ""
+          if (lastApplied) {
+            try { lastAppliedYaml = dump(JSON.parse(lastApplied), { lineWidth: -1, noRefs: true }) } catch {}
+          }
+          return { kind: k, name: n, namespace, lastAppliedYaml, summaryRows: buildSummaryRows(k, item) }
+        })
       }
-      return { kind: k, name: n, namespace, lastAppliedYaml, summaryRows: buildSummaryRows(k, item) }
-    })
-  } catch {
-    return []
+    } catch {}
   }
+
+  const results = await Promise.all(
+    names.map(async (name): Promise<ApplicationResource | null> => {
+      const singleJson = await kubectlContextAsync(
+        contextName,
+        `get ${kindFlag} ${name} -n ${namespace} -o json --ignore-not-found`,
+        5000,
+      )
+      if (!singleJson) return null
+      try {
+        const item = JSON.parse(singleJson)
+        const k = item.kind || kind
+        const n = item.metadata?.name || name
+        const lastApplied = item.metadata?.annotations?.["kubectl.kubernetes.io/last-applied-configuration"]
+        let lastAppliedYaml = ""
+        if (lastApplied) {
+          try { lastAppliedYaml = dump(JSON.parse(lastApplied), { lineWidth: -1, noRefs: true }) } catch {}
+        }
+        return { kind: k, name: n, namespace, lastAppliedYaml, summaryRows: buildSummaryRows(k, item) }
+      } catch {
+        return null
+      }
+    }),
+  )
+  return results.filter((r): r is ApplicationResource => r !== null)
 }
 
 export async function fetchPodDetailAsync(
