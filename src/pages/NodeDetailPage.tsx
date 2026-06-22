@@ -1,15 +1,16 @@
-import { useCallback, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useKeyboard, useTerminalDimensions } from "@opentui/react"
 import { t, fg } from "@opentui/core"
 import { CommandsBar } from "../components/CommandsBar"
 import { NodeBars, PodTable } from "../components/NodeDetail"
 import type { NodeDetail, PodDetail, MetricMode } from "../types"
 
+const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+
 interface NodeDetailPageProps {
   node: NodeDetail
   pods: PodDetail[]
   loading: boolean
-  spinner: string
   metricMode: MetricMode
   onOpenPod: (pod: PodDetail) => void
   onBack: () => void
@@ -21,7 +22,6 @@ export function NodeDetailPage({
   node,
   pods,
   loading,
-  spinner,
   metricMode,
   onOpenPod,
   onBack,
@@ -30,6 +30,18 @@ export function NodeDetailPage({
 }: NodeDetailPageProps) {
   const [podListIndex, setPodListIndex] = useState(0)
   const [podScrollOffset, setPodScrollOffset] = useState(0)
+  const [spinnerFrame, setSpinnerFrame] = useState(0)
+  const spinnerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const spinner = SPINNER_FRAMES[spinnerFrame % SPINNER_FRAMES.length] ?? "⠋"
+
+  useEffect(() => {
+    if (!loading) {
+      if (spinnerRef.current) { clearInterval(spinnerRef.current); spinnerRef.current = null }
+      return
+    }
+    spinnerRef.current = setInterval(() => setSpinnerFrame((f: number) => f + 1), 80)
+    return () => { if (spinnerRef.current) { clearInterval(spinnerRef.current); spinnerRef.current = null } }
+  }, [loading])
 
   const { height: termHeight } = useTerminalDimensions()
   const maxPodRows = Math.max(1, termHeight - 20)
@@ -89,6 +101,7 @@ export function NodeDetailPage({
         {loading ? (
           <box style={{ flexDirection: "column", alignItems: "center", justifyContent: "center", flexGrow: 1 }}>
             <text content={t`${fg("#D29922")(spinner)} ${fg("#8B949E")("Loading pod data...")}`} />
+            <text fg="#484F58" content={`Fetching pods on ${node.name}...`} />
           </box>
         ) : (
           <PodTable

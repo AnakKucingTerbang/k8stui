@@ -807,7 +807,7 @@ export async function fetchPodDetailAsync(
       ready,
       qosClass: pod.status?.qosClass || "──",
       yaml: podYaml || "",
-      appResources: [],
+      appResources: undefined,
       ownerKind: ownerResult.ownerKind,
       ownerName: ownerResult.ownerName,
     }

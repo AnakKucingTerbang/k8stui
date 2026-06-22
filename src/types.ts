@@ -95,7 +95,7 @@ export interface PodDetailFull {
   ready: boolean
   qosClass: string
   yaml: string
-  appResources: ApplicationResource[]
+  appResources: ApplicationResource[] | undefined
   ownerKind: string
   ownerName: string
 }

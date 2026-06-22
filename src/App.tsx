@@ -56,7 +56,7 @@ export function App({ renderer }: AppProps) {
 
   const [selectedPod, setSelectedPod] = useState<PodDetail | null>(null)
   const [podDetailFull, setPodDetailFull] = useState<PodDetailFull | null>(null)
-  const [podDetailLoading, setPodDetailLoading] = useState(false)
+
 
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const spinnerRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -169,11 +169,9 @@ export function App({ renderer }: AppProps) {
   const handleOpenPod = useCallback((pod: PodDetail) => {
     setSelectedPod(pod)
     setPodDetailFull(null)
-    setPodDetailLoading(true)
     setPage("pod-detail")
     fetchPodDetailAsync(currentContext, pod.name, pod.namespace, (partial) => {
       setPodDetailFull(partial)
-      setPodDetailLoading(false)
     }).then((detail) => {
       setPodDetailFull(detail)
     })
@@ -251,7 +249,6 @@ export function App({ renderer }: AppProps) {
           cluster={selectedCluster}
           nodeDetails={nodeDetails}
           loading={detailLoading}
-          spinner={spinner}
           metricMode={metricMode}
           onOpenNode={handleOpenNode}
           onBack={handleBack}
@@ -265,7 +262,6 @@ export function App({ renderer }: AppProps) {
           node={selectedNode}
           pods={pods}
           loading={nodeLoading}
-          spinner={spinner}
           metricMode={metricMode}
           onOpenPod={handleOpenPod}
           onBack={handleBack}
@@ -278,7 +274,6 @@ export function App({ renderer }: AppProps) {
         <PodDetailPage
           pod={selectedPod}
           podDetailFull={podDetailFull}
-          loading={podDetailLoading}
           onBack={handleBack}
           onQuit={handleQuit}
           onRefresh={handleRefreshPodDetail}

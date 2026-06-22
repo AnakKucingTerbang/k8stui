@@ -5,12 +5,11 @@ interface ContainersBoxProps {
   containers: PodContainer[]
   selectedIndex: number
   focused: boolean
-  loading?: boolean
-  spinner?: string
+  spinner: string
 }
 
-export function ContainersBox({ containers, selectedIndex, focused, loading, spinner }: ContainersBoxProps) {
-  if (loading) {
+export function ContainersBox({ containers, selectedIndex, focused, spinner }: ContainersBoxProps) {
+  if (containers.length === 0) {
     return (
       <box
         title="CONTAINERS"
@@ -18,7 +17,7 @@ export function ContainersBox({ containers, selectedIndex, focused, loading, spi
         borderColor={focused ? "#58A6FF" : "#30363D"}
         style={{ flexDirection: "column", width: "100%" }}
       >
-        <text content={t`${fg("#D29922")(spinner || "⠋")} ${fg("#8B949E")("Loading...")}`} />
+        <text content={t`${fg("#D29922")(spinner)} ${fg("#8B949E")("Loading...")}`} />
       </box>
     )
   }

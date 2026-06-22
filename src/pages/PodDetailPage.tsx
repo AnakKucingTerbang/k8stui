@@ -80,7 +80,6 @@ function shortKind(kind: string): string {
 interface PodDetailPageProps {
   pod: PodDetail
   podDetailFull: PodDetailFull | null
-  loading: boolean
   onBack: () => void
   onQuit: () => void
   onRefresh: () => void
@@ -92,7 +91,6 @@ const LEFT_ORDER: LeftBox[] = ["containers", "application", "manifests"]
 export function PodDetailPage({
   pod,
   podDetailFull,
-  loading,
   onBack,
   onQuit,
   onRefresh,
@@ -123,8 +121,10 @@ export function PodDetailPage({
 
   const localSpinner = SPINNER_FRAMES[spinnerFrame % SPINNER_FRAMES.length] ?? "⠋"
 
+  const isLoading = !podDetailFull || podDetailFull.appResources === undefined
+
   useEffect(() => {
-    if (!loading) {
+    if (!isLoading) {
       if (spinnerRef.current) {
         clearInterval(spinnerRef.current)
         spinnerRef.current = null
@@ -140,13 +140,14 @@ export function PodDetailPage({
         spinnerRef.current = null
       }
     }
-  }, [loading])
+  }, [isLoading])
 
   const { height: termHeight } = useTerminalDimensions()
   const maxVisibleRows = Math.max(1, termHeight - 24)
 
-  const manifestItems: ManifestItem[] = useMemo(() => {
-    if (!podDetailFull) return []
+  const manifestItems: ManifestItem[] | undefined = useMemo(() => {
+    if (!podDetailFull) return undefined
+    if (podDetailFull.appResources === undefined) return undefined
     const items: ManifestItem[] = []
     for (const r of podDetailFull.appResources) {
       if (r.lastAppliedYaml) {
@@ -157,17 +158,7 @@ export function PodDetailPage({
     return items
   }, [podDetailFull])
 
-  const isLiveManifest = manifestIndex === manifestItems.length - 1
-
-  const containerRefNames = useMemo(() => {
-    if (!podDetailFull || podDetailFull.containers.length === 0) {
-      return { pvcs: [] as string[], secrets: [] as string[], configMaps: [] as string[] }
-    }
-    const c = podDetailFull.containers[containerIndex]
-    return c
-      ? { pvcs: c.pvcRefNames, secrets: c.secretRefNames, configMaps: c.configMapRefNames }
-      : { pvcs: [] as string[], secrets: [] as string[], configMaps: [] as string[] }
-  }, [podDetailFull, containerIndex])
+  const isLiveManifest = manifestItems !== undefined && manifestIndex === manifestItems.length - 1
 
   const detailsRows = useMemo((): DetailRow[] | undefined => {
     if (!podDetailFull) return undefined
@@ -176,7 +167,7 @@ export function PodDetailPage({
       return c ? buildContainerRows(c) : undefined
     }
     if (lastLeftBox === "application") {
-      const r = podDetailFull.appResources[appResourceIndex]
+      const r = podDetailFull.appResources?.[appResourceIndex]
       return r ? r.summaryRows : undefined
     }
     return undefined
@@ -184,11 +175,11 @@ export function PodDetailPage({
 
   const detailsYaml = useMemo((): string | undefined => {
     if (lastLeftBox !== "manifests" || !podDetailFull) return undefined
-    if (manifestItems.length === 0) return undefined
+    if (manifestItems === undefined || manifestItems.length === 0) return undefined
     if (isLiveManifest) return podDetailFull.yaml
-    const r = podDetailFull.appResources.filter(r => r.lastAppliedYaml)[manifestIndex]
+    const r = podDetailFull.appResources?.filter(r => r.lastAppliedYaml)[manifestIndex]
     return r?.lastAppliedYaml || undefined
-  }, [podDetailFull, lastLeftBox, manifestIndex, manifestItems.length, isLiveManifest])
+  }, [podDetailFull, lastLeftBox, manifestIndex, manifestItems, isLiveManifest])
 
   const isYamlDetails = detailsYaml !== undefined
   const canEdit = lastLeftBox === "manifests" && !isLiveManifest && detailsYaml !== undefined && yamlEditMode === "view"
@@ -275,12 +266,13 @@ export function PodDetailPage({
           setDetailScrollOffset(0)
           setDetailRowIndex(-1)
         } else if (focus === "application") {
-          const max = podDetailFull?.appResources.length ?? 0
+          const max = podDetailFull?.appResources?.length ?? 0
           if (appResourceIndex < max - 1) setAppResourceIndex((i) => i + 1)
           setDetailScrollOffset(0)
           setDetailRowIndex(-1)
         } else if (focus === "manifests") {
-          if (manifestIndex < manifestItems.length - 1) setManifestIndex((i) => i + 1)
+          const max = manifestItems?.length ?? 0
+          if (manifestIndex < max - 1) setManifestIndex((i) => i + 1)
           setDetailScrollOffset(0)
           setDetailRowIndex(-1)
         }
@@ -332,7 +324,7 @@ export function PodDetailPage({
     },
     [
       focus, lastLeftBox, containerIndex, appResourceIndex, manifestIndex,
-      podDetailFull, manifestItems.length, detailsRows, detailRowIndex,
+      podDetailFull, manifestItems?.length, detailsRows, detailRowIndex,
       isYamlDetails, yamlEditMode, canEdit, activeYaml, maxVisibleRows,
       detailScrollOffset, onBack, onQuit,
     ],
@@ -380,14 +372,14 @@ export function PodDetailPage({
   }, [focus])
 
   useEffect(() => {
-    const max = manifestItems.length - 1
+    const max = (manifestItems?.length ?? 0) - 1
     if (manifestIndex > max && max >= 0) setManifestIndex(max)
-  }, [manifestItems.length, manifestIndex])
+  }, [manifestItems?.length, manifestIndex])
 
   const editingLabel = useMemo(() => {
     if (lastLeftBox !== "manifests" || !podDetailFull) return `${podDetailFull?.ownerKind || ""}/${podDetailFull?.ownerName || ""}`
     if (isLiveManifest) return "pod"
-    const r = podDetailFull.appResources.filter(r => r.lastAppliedYaml)[manifestIndex]
+    const r = podDetailFull.appResources?.filter(r => r.lastAppliedYaml)[manifestIndex]
     return r ? `${r.kind}: ${r.name}` : ""
   }, [lastLeftBox, podDetailFull, manifestIndex, isLiveManifest])
 
@@ -445,11 +437,11 @@ export function PodDetailPage({
       return name
     }
     if (lastLeftBox === "application") {
-      const r = podDetailFull?.appResources[appResourceIndex]
+      const r = podDetailFull?.appResources?.[appResourceIndex]
       return r ? `${r.kind}: ${r.name}` : "APPLICATION"
     }
     if (lastLeftBox === "manifests") {
-      if (manifestItems.length === 0) return "MANIFESTS"
+      if (!manifestItems || manifestItems.length === 0) return "MANIFESTS"
       if (isLiveManifest) return "LIVE MANIFEST"
       const item = manifestItems[manifestIndex]
       return item?.label || "MANIFEST"
@@ -467,16 +459,13 @@ export function PodDetailPage({
             containers={podDetailFull?.containers || []}
             selectedIndex={containerIndex}
             focused={leftBoxFocused("containers")}
-            loading={loading}
             spinner={localSpinner}
           />
 
           <ApplicationBox
-            resources={podDetailFull?.appResources || []}
+            resources={podDetailFull?.appResources}
             selectedIndex={appResourceIndex}
             focused={leftBoxFocused("application")}
-            containerRefNames={containerRefNames}
-            loading={loading}
             spinner={localSpinner}
           />
 
@@ -484,7 +473,6 @@ export function PodDetailPage({
             items={manifestItems}
             selectedIndex={manifestIndex}
             focused={leftBoxFocused("manifests")}
-            loading={loading}
             spinner={localSpinner}
           />
         </box>
@@ -509,7 +497,6 @@ export function PodDetailPage({
                 if (textareaRef.current) setEditedYaml(textareaRef.current.plainText ?? "")
               }}
               onSubmit={handleApply}
-              loading={loading}
               spinner={localSpinner}
             />
           </box>

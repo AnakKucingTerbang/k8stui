@@ -23,8 +23,7 @@ interface DetailsPanelProps {
   textareaRef: React.RefObject<any>
   onContentChange?: () => void
   onSubmit?: () => void
-  loading?: boolean
-  spinner?: string
+  spinner: string
 }
 
 export function DetailsPanel({
@@ -38,16 +37,15 @@ export function DetailsPanel({
   textareaRef,
   onContentChange,
   onSubmit,
-  loading,
   spinner,
 }: DetailsPanelProps) {
   const { height: termHeight } = useTerminalDimensions()
   const maxVisibleRows = Math.max(1, termHeight - 24)
 
-  if (loading) {
+  if (!rows && yaml === undefined) {
     return (
       <box style={{ flexDirection: "column", paddingLeft: 1, paddingRight: 1, alignItems: "center", justifyContent: "center", flexGrow: 1 }}>
-        <text content={t`${fg("#D29922")(spinner || "⠋")} ${fg("#8B949E")("Loading pod data...")}`} />
+        <text content={t`${fg("#D29922")(spinner)} ${fg("#8B949E")("Loading...")}`} />
       </box>
     )
   }

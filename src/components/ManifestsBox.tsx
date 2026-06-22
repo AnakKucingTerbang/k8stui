@@ -6,15 +6,14 @@ export interface ManifestItem {
 }
 
 interface ManifestsBoxProps {
-  items: ManifestItem[]
+  items: ManifestItem[] | undefined
   selectedIndex: number
   focused: boolean
-  loading?: boolean
-  spinner?: string
+  spinner: string
 }
 
-export function ManifestsBox({ items, selectedIndex, focused, loading, spinner }: ManifestsBoxProps) {
-  if (loading) {
+export function ManifestsBox({ items, selectedIndex, focused, spinner }: ManifestsBoxProps) {
+  if (items === undefined) {
     return (
       <box
         title="MANIFESTS"
@@ -22,7 +21,7 @@ export function ManifestsBox({ items, selectedIndex, focused, loading, spinner }
         borderColor={focused ? "#58A6FF" : "#30363D"}
         style={{ flexDirection: "column", width: "100%" }}
       >
-        <text content={t`${fg("#D29922")(spinner || "⠋")} ${fg("#8B949E")("Loading...")}`} />
+        <text content={t`${fg("#D29922")(spinner)} ${fg("#8B949E")("Loading...")}`} />
       </box>
     )
   }
@@ -40,6 +39,8 @@ export function ManifestsBox({ items, selectedIndex, focused, loading, spinner }
     )
   }
 
+  const showSeparator = items.length >= 2
+
   return (
     <box
       title="MANIFESTS"
@@ -53,9 +54,16 @@ export function ManifestsBox({ items, selectedIndex, focused, loading, spinner }
         const textColor = isSelected ? "#E6EDF3" : "#8B949E"
 
         return (
-          <box key={`m-${i}`} style={{ height: 1, width: "100%", backgroundColor: bgColor }}>
-            <text content={t`${fg(textColor)(` ${item.label}`)}`} />
-          </box>
+          <>
+            {showSeparator && i === items.length - 1 && (
+              <box key="sep" style={{ height: 1, width: "100%" }}>
+                <text content={t`${fg("#484F58")(" ───────────────────────")}`} />
+              </box>
+            )}
+            <box key={`m-${i}`} style={{ height: 1, width: "100%", backgroundColor: bgColor }}>
+              <text content={t`${fg(textColor)(` ${item.label}`)}`} />
+            </box>
+          </>
         )
       })}
     </box>

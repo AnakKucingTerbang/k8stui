@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useKeyboard, useTerminalDimensions } from "@opentui/react"
 import { t, fg } from "@opentui/core"
 import { ClusterOverview } from "../components/ClusterOverview"
@@ -6,11 +6,12 @@ import { CommandsBar } from "../components/CommandsBar"
 import { NodeTable } from "../components/NodeTable"
 import type { Cluster, NodeDetail, MetricMode } from "../types"
 
+const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+
 interface ClusterDetailPageProps {
   cluster: Cluster
   nodeDetails: NodeDetail[]
   loading: boolean
-  spinner: string
   metricMode: MetricMode
   onOpenNode: (node: NodeDetail) => void
   onBack: () => void
@@ -22,7 +23,6 @@ export function ClusterDetailPage({
   cluster,
   nodeDetails,
   loading,
-  spinner,
   metricMode,
   onOpenNode,
   onBack,
@@ -31,6 +31,18 @@ export function ClusterDetailPage({
 }: ClusterDetailPageProps) {
   const [nodeListIndex, setNodeListIndex] = useState(0)
   const [nodeScrollOffset, setNodeScrollOffset] = useState(0)
+  const [spinnerFrame, setSpinnerFrame] = useState(0)
+  const spinnerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const spinner = SPINNER_FRAMES[spinnerFrame % SPINNER_FRAMES.length] ?? "⠋"
+
+  useEffect(() => {
+    if (!loading) {
+      if (spinnerRef.current) { clearInterval(spinnerRef.current); spinnerRef.current = null }
+      return
+    }
+    spinnerRef.current = setInterval(() => setSpinnerFrame((f: number) => f + 1), 80)
+    return () => { if (spinnerRef.current) { clearInterval(spinnerRef.current); spinnerRef.current = null } }
+  }, [loading])
 
   const { height: termHeight } = useTerminalDimensions()
   const maxNodeRows = Math.max(1, termHeight - 20)
@@ -92,6 +104,7 @@ export function ClusterDetailPage({
         {loading ? (
           <box style={{ flexDirection: "column", alignItems: "center", justifyContent: "center", flexGrow: 1 }}>
             <text content={t`${fg("#D29922")(spinner)} ${fg("#8B949E")("Loading node data...")}`} />
+            <text fg="#484F58" content={`Fetching from ${cluster.name}...`} />
           </box>
         ) : (
           <NodeTable
