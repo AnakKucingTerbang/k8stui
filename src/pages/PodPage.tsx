@@ -91,7 +91,7 @@ interface PodDetailPageProps {
 
 const LEFT_ORDER: LeftBox[] = ["containers", "application", "manifests", "logs"]
 
-export function PodDetailPage({
+export function PodPage({
   pod,
   podDetailFull,
   onBack,

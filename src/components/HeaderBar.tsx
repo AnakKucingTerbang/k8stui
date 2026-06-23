@@ -30,21 +30,17 @@ interface BreadcrumbOpts {
   currentContext: string
   clusterName?: string
   nodeName?: string
+  namespaceName?: string
+  resourceKind?: string
+  resourceName?: string
   podName?: string
   spinner?: string
 }
 
 export function buildBreadcrumbParts(opts: BreadcrumbOpts): StyledText {
-  const { currentContext, clusterName, nodeName, podName, spinner } = opts
+  const { currentContext, clusterName, nodeName, namespaceName, resourceKind, resourceName, podName, spinner } = opts
+  const S = fg("#484F58")(" | ")
+  const E = ""
 
-  if (podName && nodeName && clusterName) {
-    return t`${fg("#8B949E")("k8s manager")}${fg("#484F58")(" | ")}${fg("#58A6FF")("context:")}${fg("#8B949E")(` ${currentContext}`)}${fg("#484F58")(" | ")}${fg("#58A6FF")("cluster:")}${fg("#8B949E")(` ${clusterName}`)}${fg("#484F58")(" | ")}${fg("#58A6FF")("node:")}${fg("#8B949E")(` ${nodeName}`)}${fg("#484F58")(" | ")}${fg("#58A6FF")("pod:")}${fg("#8B949E")(` ${podName}`)}${spinner ? fg("#D29922")(spinner) : ""}`
-  }
-  if (nodeName && clusterName) {
-    return t`${fg("#8B949E")("k8s manager")}${fg("#484F58")(" | ")}${fg("#58A6FF")("context:")}${fg("#8B949E")(` ${currentContext}`)}${fg("#484F58")(" | ")}${fg("#58A6FF")("cluster:")}${fg("#8B949E")(` ${clusterName}`)}${fg("#484F58")(" | ")}${fg("#58A6FF")("node:")}${fg("#8B949E")(` ${nodeName}`)}${spinner ? fg("#D29922")(spinner) : ""}`
-  }
-  if (clusterName) {
-    return t`${fg("#8B949E")("k8s manager")}${fg("#484F58")(" | ")}${fg("#58A6FF")("context:")}${fg("#8B949E")(` ${currentContext}`)}${fg("#484F58")(" | ")}${fg("#58A6FF")("cluster:")}${fg("#8B949E")(` ${clusterName}`)}${spinner ? fg("#D29922")(spinner) : ""}`
-  }
-  return t`${fg("#8B949E")("k8s manager")}${fg("#484F58")(" | ")}${fg("#58A6FF")("context:")}${fg("#8B949E")(` ${currentContext}`)}${spinner ? fg("#D29922")(spinner) : ""}`
+  return t`${fg("#8B949E")("k8s manager")}${S}${fg("#58A6FF")("context:")}${fg("#8B949E")(` ${currentContext}`)}${clusterName ? S : E}${clusterName ? fg("#58A6FF")("cluster:") : E}${clusterName ? fg("#8B949E")(` ${clusterName}`) : E}${nodeName ? S : E}${nodeName ? fg("#58A6FF")("node:") : E}${nodeName ? fg("#8B949E")(` ${nodeName}`) : E}${namespaceName ? S : E}${namespaceName ? fg("#58A6FF")("ns:") : E}${namespaceName ? fg("#8B949E")(` ${namespaceName}`) : E}${resourceKind && resourceName ? S : E}${resourceKind && resourceName ? fg("#58A6FF")(`${resourceKind.toLowerCase()}:`) : E}${resourceKind && resourceName ? fg("#8B949E")(` ${resourceName}`) : E}${podName ? S : E}${podName ? fg("#58A6FF")("pod:") : E}${podName ? fg("#8B949E")(` ${podName}`) : E}${spinner ? fg("#D29922")(spinner) : E}`
 }

@@ -118,3 +118,45 @@ export interface ClusterResource {
   namespace: string
   category: ResourceCategory
 }
+
+export interface NodeCondition {
+  type: string
+  status: string
+  reason: string
+  message: string
+  lastTransitionTime: string
+}
+
+export interface NamespacedResource {
+  kind: string
+  name: string
+  namespace: string
+  age: string
+}
+
+export interface NamespaceDetailData {
+  workloads: NamespacedResource[]
+  pods: PodDetail[]
+  network: NamespacedResource[]
+  config: NamespacedResource[]
+}
+
+export interface WorkloadDetailData {
+  summary: DetailRow[]
+  pods: PodDetail[]
+}
+
+export interface NetworkDetailData {
+  summary: DetailRow[]
+  pods: PodDetail[]
+}
+
+export interface StorageDetailData {
+  summary: DetailRow[]
+  mountPod: PodDetail | null
+}
+
+export interface ConfigDetailData {
+  summary: DetailRow[]
+  pods: PodDetail[]
+}

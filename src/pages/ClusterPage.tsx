@@ -55,12 +55,14 @@ interface ClusterDetailPageProps {
   loading: boolean
   metricMode: MetricMode
   onOpenNode: (node: NodeDetail) => void
+  onOpenNamespace: (namespace: string) => void
+  onOpenResource: (resource: ClusterResource) => void
   onBack: () => void
   onToggleMetric: () => void
   onQuit: () => void
 }
 
-export function ClusterDetailPage({
+export function ClusterPage({
   cluster,
   nodeDetails,
   namespaces,
@@ -68,6 +70,8 @@ export function ClusterDetailPage({
   loading,
   metricMode,
   onOpenNode,
+  onOpenNamespace,
+  onOpenResource,
   onBack,
   onToggleMetric,
   onQuit,
@@ -201,6 +205,12 @@ export function ClusterDetailPage({
         if (view === "nodes") {
           const node = nodeDetails[nodeListIndex]
           if (node) onOpenNode(node)
+        } else if (view === "namespaces") {
+          const ns = namespaces[nsListIndex]
+          if (ns) onOpenNamespace(ns.name)
+        } else if (view === "resources") {
+          const res = resources[resourceListIndex]
+          if (res) onOpenResource(res)
         }
       } else if (key.name === "m") {
         onToggleMetric()
@@ -208,7 +218,7 @@ export function ClusterDetailPage({
         onQuit()
       }
     },
-    [view, nodeListIndex, nodeDetails.length, nsListIndex, namespaces.length, resourceListIndex, resources, onOpenNode, onBack, onToggleMetric, onQuit, scrollIntoView],
+    [view, nodeListIndex, nodeDetails.length, nsListIndex, namespaces.length, resourceListIndex, resources, onOpenNode, onOpenNamespace, onOpenResource, onBack, onToggleMetric, onQuit, scrollIntoView],
   )
 
   useKeyboard(handleKey)
@@ -220,7 +230,7 @@ export function ClusterDetailPage({
   }, [view])
 
   const commands = useMemo(() => {
-    return t`${fg("#58A6FF")("[1]")} ${fg("#8B949E")("nodes  ")}${fg("#58A6FF")("[2]")} ${fg("#8B949E")("namespaces  ")}${fg("#58A6FF")("[3]")} ${fg("#8B949E")("resources  ")}${fg("#58A6FF")("[m]")} ${fg("#8B949E")("etric  ")}${fg("#58A6FF")("[esc]")} ${fg("#8B949E")("back  ")}${fg("#58A6FF")("[q]")} ${fg("#8B949E")("uit")}`
+    return t`${fg("#58A6FF")("[1]")} ${fg("#8B949E")("nodes  ")}${fg("#58A6FF")("[2]")} ${fg("#8B949E")("namespaces  ")}${fg("#58A6FF")("[3]")} ${fg("#8B949E")("resources  ")}${fg("#58A6FF")("[enter]")} ${fg("#8B949E")("open  ")}${fg("#58A6FF")("[m]")} ${fg("#8B949E")("etric  ")}${fg("#58A6FF")("[esc]")} ${fg("#8B949E")("back  ")}${fg("#58A6FF")("[q]")} ${fg("#8B949E")("uit")}`
   }, [])
 
   return (

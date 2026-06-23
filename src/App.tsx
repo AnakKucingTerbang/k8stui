@@ -2,11 +2,20 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { useRenderer } from "@opentui/react"
 import type { CliRenderer } from "@opentui/core"
 import { HeaderBar, buildBreadcrumbParts } from "./components/HeaderBar"
-import { ClusterListPage } from "./pages/ClusterListPage"
-import { ClusterDetailPage } from "./pages/ClusterDetailPage"
-import { NodeDetailPage } from "./pages/NodeDetailPage"
-import { PodDetailPage } from "./pages/PodDetailPage"
-import type { Cluster, KubeContext, MetricMode, NodeDetail, NamespaceInfo, ClusterResource, PodDetail, PodDetailFull } from "./types"
+import { ClustersPage } from "./pages/ClustersPage"
+import { ClusterPage } from "./pages/ClusterPage"
+import { NodePage } from "./pages/NodePage"
+import { NamespacePage } from "./pages/NamespacePage"
+import { WorkloadPage } from "./pages/WorkloadPage"
+import { NetworkPage } from "./pages/NetworkPage"
+import { StoragePage } from "./pages/StoragePage"
+import { ConfigPage } from "./pages/ConfigPage"
+import { PodPage } from "./pages/PodPage"
+import type {
+  Cluster, KubeContext, MetricMode, NodeDetail, NodeCondition,
+  NamespaceInfo, ClusterResource, PodDetail, PodDetailFull,
+  NamespacedResource, DetailRow, ResourceCategory,
+} from "./types"
 import {
   loadContextsAsync,
   getCurrentContext,
@@ -14,10 +23,25 @@ import {
   fetchClusterStatusAsync,
   fetchClusterDetailDataAsync,
   fetchPodsForNodeAsync,
+  fetchNodeConditionsAsync,
   fetchPodDetailAsync,
+  fetchNamespaceDetailAsync,
+  fetchWorkloadDetailAsync,
+  fetchNetworkDetailAsync,
+  fetchStorageDetailAsync,
+  fetchConfigDetailAsync,
 } from "./kube"
 
-type Page = "cluster-list" | "cluster-detail" | "node-detail" | "pod-detail"
+type NavEntry =
+  | { page: "clusters" }
+  | { page: "cluster"; cluster: Cluster }
+  | { page: "node"; node: NodeDetail }
+  | { page: "namespace"; namespace: string }
+  | { page: "workload"; kind: string; name: string; namespace: string }
+  | { page: "network"; kind: string; name: string; namespace: string }
+  | { page: "storage"; name: string; namespace: string }
+  | { page: "config"; kind: string; name: string; namespace: string }
+  | { page: "pod"; pod: PodDetail }
 
 const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
 
@@ -35,30 +59,47 @@ interface AppProps {
 }
 
 export function App({ renderer }: AppProps) {
+  const [stack, setStack] = useState<NavEntry[]>([{ page: "clusters" }])
   const [clusters, setClusters] = useState<Cluster[]>([])
   const [clock, setClock] = useState(formatTime(new Date()))
-
   const [contexts, setContexts] = useState<KubeContext[]>([])
   const [currentContext, setCurrentContext] = useState("")
-
   const [loading, setLoading] = useState(true)
   const [spinnerFrame, setSpinnerFrame] = useState(0)
 
-  const [page, setPage] = useState<Page>("cluster-list")
-  const [selectedCluster, setSelectedCluster] = useState<Cluster | null>(null)
   const [nodeDetails, setNodeDetails] = useState<NodeDetail[]>([])
   const [namespaces, setNamespaces] = useState<NamespaceInfo[]>([])
   const [clusterResources, setClusterResources] = useState<ClusterResource[]>([])
   const [detailLoading, setDetailLoading] = useState(false)
 
-  const [selectedNode, setSelectedNode] = useState<NodeDetail | null>(null)
   const [pods, setPods] = useState<PodDetail[]>([])
+  const [nodeConditions, setNodeConditions] = useState<NodeCondition[]>([])
   const [nodeLoading, setNodeLoading] = useState(false)
-  const [metricMode, setMetricMode] = useState<MetricMode>("pct")
 
-  const [selectedPod, setSelectedPod] = useState<PodDetail | null>(null)
+  const [nsWorkloads, setNsWorkloads] = useState<NamespacedResource[]>([])
+  const [nsPods, setNsPods] = useState<PodDetail[]>([])
+  const [nsNetwork, setNsNetwork] = useState<NamespacedResource[]>([])
+  const [nsConfig, setNsConfig] = useState<NamespacedResource[]>([])
+  const [nsLoading, setNsLoading] = useState(false)
+
+  const [workloadSummary, setWorkloadSummary] = useState<DetailRow[]>([])
+  const [workloadPods, setWorkloadPods] = useState<PodDetail[]>([])
+  const [workloadLoading, setWorkloadLoading] = useState(false)
+
+  const [networkSummary, setNetworkSummary] = useState<DetailRow[]>([])
+  const [networkPods, setNetworkPods] = useState<PodDetail[]>([])
+  const [networkLoading, setNetworkLoading] = useState(false)
+
+  const [storageSummary, setStorageSummary] = useState<DetailRow[]>([])
+  const [storageMountPod, setStorageMountPod] = useState<PodDetail | null>(null)
+  const [storageLoading, setStorageLoading] = useState(false)
+
+  const [configSummary, setConfigSummary] = useState<DetailRow[]>([])
+  const [configPods, setConfigPods] = useState<PodDetail[]>([])
+  const [configLoading, setConfigLoading] = useState(false)
+
   const [podDetailFull, setPodDetailFull] = useState<PodDetailFull | null>(null)
-
+  const [metricMode, setMetricMode] = useState<MetricMode>("pct")
 
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const spinnerRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -67,22 +108,22 @@ export function App({ renderer }: AppProps) {
 
   useEffect(() => {
     if (!loading) {
-      if (spinnerRef.current) {
-        clearInterval(spinnerRef.current)
-        spinnerRef.current = null
-      }
+      if (spinnerRef.current) { clearInterval(spinnerRef.current); spinnerRef.current = null }
       return
     }
-    spinnerRef.current = setInterval(() => {
-      setSpinnerFrame((f: number) => f + 1)
-    }, 80)
-    return () => {
-      if (spinnerRef.current) {
-        clearInterval(spinnerRef.current)
-        spinnerRef.current = null
-      }
-    }
+    spinnerRef.current = setInterval(() => setSpinnerFrame((f: number) => f + 1), 80)
+    return () => { if (spinnerRef.current) { clearInterval(spinnerRef.current); spinnerRef.current = null } }
   }, [loading])
+
+  const push = useCallback((entry: NavEntry) => {
+    setStack((prev) => [...prev, entry])
+  }, [])
+
+  const pop = useCallback(() => {
+    setStack((prev) => prev.length > 1 ? prev.slice(0, -1) : prev)
+  }, [])
+
+  const current = stack[stack.length - 1]!
 
   const refreshCluster = useCallback(async () => {
     const data = await fetchClusterStatusAsync(currentContext)
@@ -91,13 +132,7 @@ export function App({ renderer }: AppProps) {
 
   const doContextSwitch = useCallback(async (ctxName: string) => {
     setLoading(true)
-    setPage("cluster-list")
-    setSelectedCluster(null)
-    setNodeDetails([])
-    setSelectedNode(null)
-    setPods([])
-    setSelectedPod(null)
-    setPodDetailFull(null)
+    setStack([{ page: "clusters" }])
     switchContext(ctxName)
     setCurrentContext(ctxName)
     const data = await fetchClusterStatusAsync(ctxName)
@@ -112,7 +147,6 @@ export function App({ renderer }: AppProps) {
       const cur = getCurrentContext()
       setContexts(ctxs)
       setCurrentContext(cur)
-
       if (cur) {
         const data = await fetchClusterStatusAsync(cur)
         setClusters([data])
@@ -123,95 +157,184 @@ export function App({ renderer }: AppProps) {
 
   useEffect(() => {
     if (!currentContext) return
-
     refreshCluster()
-
     pollRef.current = setInterval(refreshCluster, 5000)
-
-    return () => {
-      if (pollRef.current) clearInterval(pollRef.current)
-    }
+    return () => { if (pollRef.current) clearInterval(pollRef.current) }
   }, [currentContext, refreshCluster])
 
   useEffect(() => {
     renderer.requestLive()
-
-    const clockInterval = setInterval(() => {
-      setClock(formatTime(new Date()))
-    }, 2000)
-
-    return () => {
-      clearInterval(clockInterval)
-      renderer.dropLive()
-    }
+    const clockInterval = setInterval(() => setClock(formatTime(new Date())), 2000)
+    return () => { clearInterval(clockInterval); renderer.dropLive() }
   }, [renderer])
 
   const handleOpenCluster = useCallback((cluster: Cluster) => {
-    setSelectedCluster(cluster)
     setNodeDetails([])
     setNamespaces([])
     setClusterResources([])
     setDetailLoading(true)
-    setPage("cluster-detail")
+    push({ page: "cluster", cluster })
     fetchClusterDetailDataAsync(currentContext).then((data) => {
       setNodeDetails(data.nodes)
       setNamespaces(data.namespaces)
       setClusterResources(data.resources)
       setDetailLoading(false)
     })
-  }, [currentContext])
+  }, [currentContext, push])
 
   const handleOpenNode = useCallback((node: NodeDetail) => {
-    setSelectedNode(node)
     setPods([])
+    setNodeConditions([])
     setNodeLoading(true)
-    setPage("node-detail")
-    fetchPodsForNodeAsync(currentContext, node.name).then((podsList) => {
+    push({ page: "node", node })
+    Promise.all([
+      fetchPodsForNodeAsync(currentContext, node.name),
+      fetchNodeConditionsAsync(currentContext, node.name),
+    ]).then(([podsList, conditions]) => {
       setPods(podsList)
+      setNodeConditions(conditions)
       setNodeLoading(false)
     })
-  }, [currentContext])
+  }, [currentContext, push])
+
+  const handleOpenNamespace = useCallback((namespace: string) => {
+    setNsWorkloads([])
+    setNsPods([])
+    setNsNetwork([])
+    setNsConfig([])
+    setNsLoading(true)
+    push({ page: "namespace", namespace })
+    fetchNamespaceDetailAsync(currentContext, namespace).then((data) => {
+      setNsWorkloads(data.workloads)
+      setNsPods(data.pods)
+      setNsNetwork(data.network)
+      setNsConfig(data.config)
+      setNsLoading(false)
+    })
+  }, [currentContext, push])
+
+  const handleOpenResource = useCallback((resource: ClusterResource) => {
+    const entry: NavEntry = (() => {
+      switch (resource.category) {
+        case "workloads": return { page: "workload" as const, kind: resource.kind, name: resource.name, namespace: resource.namespace }
+        case "network": return { page: "network" as const, kind: resource.kind, name: resource.name, namespace: resource.namespace }
+        case "storage": return { page: "storage" as const, name: resource.name, namespace: resource.namespace }
+        case "configuration": return { page: "config" as const, kind: resource.kind, name: resource.name, namespace: resource.namespace }
+      }
+    })()
+
+    switch (entry.page) {
+      case "workload":
+        setWorkloadSummary([])
+        setWorkloadPods([])
+        setWorkloadLoading(true)
+        break
+      case "network":
+        setNetworkSummary([])
+        setNetworkPods([])
+        setNetworkLoading(true)
+        break
+      case "storage":
+        setStorageSummary([])
+        setStorageMountPod(null)
+        setStorageLoading(true)
+        break
+      case "config":
+        setConfigSummary([])
+        setConfigPods([])
+        setConfigLoading(true)
+        break
+    }
+
+    push(entry)
+
+    switch (entry.page) {
+      case "workload":
+        fetchWorkloadDetailAsync(currentContext, entry.namespace, entry.kind, entry.name).then((data) => {
+          setWorkloadSummary(data.summary)
+          setWorkloadPods(data.pods)
+          setWorkloadLoading(false)
+        })
+        break
+      case "network":
+        fetchNetworkDetailAsync(currentContext, entry.namespace, entry.kind, entry.name).then((data) => {
+          setNetworkSummary(data.summary)
+          setNetworkPods(data.pods)
+          setNetworkLoading(false)
+        })
+        break
+      case "storage":
+        fetchStorageDetailAsync(currentContext, entry.namespace, entry.name).then((data) => {
+          setStorageSummary(data.summary)
+          setStorageMountPod(data.mountPod)
+          setStorageLoading(false)
+        })
+        break
+      case "config":
+        fetchConfigDetailAsync(currentContext, entry.namespace, entry.kind, entry.name).then((data) => {
+          setConfigSummary(data.summary)
+          setConfigPods(data.pods)
+          setConfigLoading(false)
+        })
+        break
+    }
+  }, [currentContext, push])
+
+  const handleOpenWorkload = useCallback((kind: string, name: string, namespace: string) => {
+    setWorkloadSummary([])
+    setWorkloadPods([])
+    setWorkloadLoading(true)
+    push({ page: "workload", kind, name, namespace })
+    fetchWorkloadDetailAsync(currentContext, namespace, kind, name).then((data) => {
+      setWorkloadSummary(data.summary)
+      setWorkloadPods(data.pods)
+      setWorkloadLoading(false)
+    })
+  }, [currentContext, push])
+
+  const handleOpenNetwork = useCallback((kind: string, name: string, namespace: string) => {
+    setNetworkSummary([])
+    setNetworkPods([])
+    setNetworkLoading(true)
+    push({ page: "network", kind, name, namespace })
+    fetchNetworkDetailAsync(currentContext, namespace, kind, name).then((data) => {
+      setNetworkSummary(data.summary)
+      setNetworkPods(data.pods)
+      setNetworkLoading(false)
+    })
+  }, [currentContext, push])
+
+  const handleOpenConfig = useCallback((kind: string, name: string, namespace: string) => {
+    setConfigSummary([])
+    setConfigPods([])
+    setConfigLoading(true)
+    push({ page: "config", kind, name, namespace })
+    fetchConfigDetailAsync(currentContext, namespace, kind, name).then((data) => {
+      setConfigSummary(data.summary)
+      setConfigPods(data.pods)
+      setConfigLoading(false)
+    })
+  }, [currentContext, push])
 
   const handleOpenPod = useCallback((pod: PodDetail) => {
-    setSelectedPod(pod)
     setPodDetailFull(null)
-    setPage("pod-detail")
+    push({ page: "pod", pod })
     fetchPodDetailAsync(currentContext, pod.name, pod.namespace, (partial) => {
       setPodDetailFull(partial)
     }).then((detail) => {
       setPodDetailFull(detail)
     })
-  }, [currentContext])
+  }, [currentContext, push])
 
   const handleRefreshPodDetail = useCallback(() => {
-    if (!selectedPod || !currentContext) return
-    fetchPodDetailAsync(currentContext, selectedPod.name, selectedPod.namespace, (partial) => {
+    const podEntry = stack.find((e): e is NavEntry & { page: "pod" } => e.page === "pod")
+    if (!podEntry || !currentContext) return
+    fetchPodDetailAsync(currentContext, podEntry.pod.name, podEntry.pod.namespace, (partial) => {
       setPodDetailFull(partial)
     }).then((detail) => {
       setPodDetailFull(detail)
     })
-    if (selectedNode) {
-      fetchPodsForNodeAsync(currentContext, selectedNode.name).then((podsList) => {
-        setPods(podsList)
-      })
-    }
-  }, [currentContext, selectedPod, selectedNode])
-
-  const handleBack = useCallback(() => {
-    if (page === "pod-detail") {
-      setSelectedPod(null)
-      setPodDetailFull(null)
-      setPage("node-detail")
-    } else if (page === "node-detail") {
-      setSelectedNode(null)
-      setPods([])
-      setPage("cluster-detail")
-    } else if (page === "cluster-detail") {
-      setSelectedCluster(null)
-      setNodeDetails([])
-      setPage("cluster-list")
-    }
-  }, [page])
+  }, [currentContext, stack])
 
   const handleToggleMetric = useCallback(() => {
     setMetricMode((prev) => prev === "pct" ? "raw" : "pct")
@@ -223,20 +346,25 @@ export function App({ renderer }: AppProps) {
 
   const breadcrumb = buildBreadcrumbParts({
     currentContext,
-    clusterName: selectedCluster?.name,
-    nodeName: selectedNode?.name,
-    podName: selectedPod?.name,
+    clusterName: current.page === "cluster" ? (current as { cluster: Cluster }).cluster?.name : undefined,
+    nodeName: current.page === "node" ? (current as { node: NodeDetail }).node?.name : undefined,
+    namespaceName: current.page === "namespace" ? (current as { namespace: string }).namespace : undefined,
+    resourceKind: current.page === "workload" ? (current as { kind: string }).kind :
+                   current.page === "network" ? (current as { kind: string }).kind :
+                   current.page === "storage" ? "PVC" :
+                   current.page === "config" ? (current as { kind: string }).kind : undefined,
+    resourceName: current.page === "workload" || current.page === "network" || current.page === "storage" || current.page === "config"
+                  ? (current as { name: string }).name : undefined,
+    podName: current.page === "pod" ? (current as { pod: PodDetail }).pod?.name : undefined,
     spinner: loading ? spinner : undefined,
   })
-
-  const showLegends = page === "cluster-list"
 
   return (
     <box style={{ flexDirection: "column", width: "100%", height: "100%", gap: 0 }}>
       <HeaderBar content={breadcrumb} clock={clock} />
 
-      {page === "cluster-list" && (
-        <ClusterListPage
+      {current.page === "clusters" && (
+        <ClustersPage
           clusters={clusters}
           contexts={contexts}
           currentContext={currentContext}
@@ -250,39 +378,117 @@ export function App({ renderer }: AppProps) {
         />
       )}
 
-      {page === "cluster-detail" && selectedCluster && (
-        <ClusterDetailPage
-          cluster={selectedCluster}
+      {current.page === "cluster" && (
+        <ClusterPage
+          cluster={(current as { cluster: Cluster }).cluster}
           nodeDetails={nodeDetails}
           namespaces={namespaces}
           resources={clusterResources}
           loading={detailLoading}
           metricMode={metricMode}
           onOpenNode={handleOpenNode}
-          onBack={handleBack}
+          onOpenNamespace={handleOpenNamespace}
+          onOpenResource={handleOpenResource}
+          onBack={pop}
           onToggleMetric={handleToggleMetric}
           onQuit={handleQuit}
         />
       )}
 
-      {page === "node-detail" && selectedNode && (
-        <NodeDetailPage
-          node={selectedNode}
+      {current.page === "node" && (
+        <NodePage
+          node={(current as { node: NodeDetail }).node}
           pods={pods}
+          conditions={nodeConditions}
           loading={nodeLoading}
           metricMode={metricMode}
           onOpenPod={handleOpenPod}
-          onBack={handleBack}
+          onBack={pop}
           onToggleMetric={handleToggleMetric}
           onQuit={handleQuit}
         />
       )}
 
-      {page === "pod-detail" && selectedPod && (
-        <PodDetailPage
-          pod={selectedPod}
+      {current.page === "namespace" && (
+        <NamespacePage
+          namespace={(current as { namespace: string }).namespace}
+          workloads={nsWorkloads}
+          pods={nsPods}
+          network={nsNetwork}
+          config={nsConfig}
+          loading={nsLoading}
+          metricMode={metricMode}
+          onOpenWorkload={handleOpenWorkload}
+          onOpenPod={handleOpenPod}
+          onOpenNetwork={handleOpenNetwork}
+          onOpenConfig={handleOpenConfig}
+          onBack={pop}
+          onQuit={handleQuit}
+        />
+      )}
+
+      {current.page === "workload" && (
+        <WorkloadPage
+          kind={(current as { kind: string }).kind}
+          name={(current as { name: string }).name}
+          namespace={(current as { namespace: string }).namespace}
+          summary={workloadSummary}
+          pods={workloadPods}
+          loading={workloadLoading}
+          metricMode={metricMode}
+          onOpenPod={handleOpenPod}
+          onBack={pop}
+          onQuit={handleQuit}
+        />
+      )}
+
+      {current.page === "network" && (
+        <NetworkPage
+          kind={(current as { kind: string }).kind}
+          name={(current as { name: string }).name}
+          namespace={(current as { namespace: string }).namespace}
+          summary={networkSummary}
+          pods={networkPods}
+          loading={networkLoading}
+          metricMode={metricMode}
+          onOpenPod={handleOpenPod}
+          onBack={pop}
+          onQuit={handleQuit}
+        />
+      )}
+
+      {current.page === "storage" && (
+        <StoragePage
+          name={(current as { name: string }).name}
+          namespace={(current as { namespace: string }).namespace}
+          summary={storageSummary}
+          mountPod={storageMountPod}
+          loading={storageLoading}
+          onOpenPod={handleOpenPod}
+          onBack={pop}
+          onQuit={handleQuit}
+        />
+      )}
+
+      {current.page === "config" && (
+        <ConfigPage
+          kind={(current as { kind: string }).kind}
+          name={(current as { name: string }).name}
+          namespace={(current as { namespace: string }).namespace}
+          summary={configSummary}
+          pods={configPods}
+          loading={configLoading}
+          onOpenPod={handleOpenPod}
+          onBack={pop}
+          onQuit={handleQuit}
+        />
+      )}
+
+      {current.page === "pod" && (
+        <PodPage
+          pod={(current as { pod: PodDetail }).pod}
           podDetailFull={podDetailFull}
-          onBack={handleBack}
+          onBack={pop}
           onQuit={handleQuit}
           onRefresh={handleRefreshPodDetail}
           contextName={currentContext}

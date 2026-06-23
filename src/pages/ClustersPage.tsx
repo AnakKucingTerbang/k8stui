@@ -53,7 +53,7 @@ interface ClusterListPageProps {
   onQuit: () => void
 }
 
-export function ClusterListPage({
+export function ClustersPage({
   clusters,
   contexts,
   currentContext,

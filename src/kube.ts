@@ -1,6 +1,6 @@
 import { exec, execSync } from "child_process"
 import { dump } from "js-yaml"
-import type { Cluster, ClusterStatus, KubeContext, NodeDetail, PodDetail, PodDetailFull, PodContainer, ApplicationResource, DetailRow, NamespaceInfo, ClusterResource, ResourceCategory } from "./types"
+import type { Cluster, ClusterStatus, KubeContext, NodeDetail, NodeCondition, PodDetail, PodDetailFull, PodContainer, ApplicationResource, DetailRow, NamespaceInfo, ClusterResource, ResourceCategory, NamespacedResource, NamespaceDetailData, WorkloadDetailData, NetworkDetailData, StorageDetailData, ConfigDetailData } from "./types"
 
 function kubectlAsync(args: string, timeout = 5000): Promise<string> {
   return new Promise((resolve) => {
@@ -973,4 +973,323 @@ export async function fetchClusterDetailDataAsync(contextName: string): Promise<
   })
 
   return { nodes: nodesResult, namespaces, resources: resourcesRaw }
+}
+
+export async function fetchNodeConditionsAsync(contextName: string, nodeName: string): Promise<NodeCondition[]> {
+  const json = await kubectlContextAsync(contextName, `get node ${nodeName} -o json`, 5000)
+  if (!json) return []
+  try {
+    const data = JSON.parse(json)
+    const conditions = data.status?.conditions || []
+    return conditions.map((c: any): NodeCondition => ({
+      type: c.type || "",
+      status: c.status || "",
+      reason: c.reason || "",
+      message: c.message || "",
+      lastTransitionTime: formatAge(c.lastTransitionTime || ""),
+    }))
+  } catch {
+    return []
+  }
+}
+
+function parseNamespacedResources(json: string): NamespacedResource[] {
+  if (!json) return []
+  try {
+    const data = JSON.parse(json)
+    const items: any[] = data.items || []
+    return items.map((item: any): NamespacedResource => ({
+      kind: item.kind || "",
+      name: item.metadata?.name || "",
+      namespace: item.metadata?.namespace || "",
+      age: formatAge(item.metadata?.creationTimestamp || ""),
+    }))
+  } catch {
+    return []
+  }
+}
+
+function parsePodsFromJson(podsJson: string, topPodsOutput: string): PodDetail[] {
+  if (!podsJson) return []
+  const podMetrics = new Map<string, { cpu: string; mem: string }>()
+  if (topPodsOutput) {
+    for (const line of topPodsOutput.split("\n")) {
+      const parts = line.split(/\s+/).filter(Boolean)
+      if (parts.length >= 4) {
+        const namespace = parts[0] ?? ""
+        const name = parts[1] ?? ""
+        const cpu = parts[2] ?? ""
+        const mem = parts[3] ?? ""
+        podMetrics.set(`${namespace}/${name}`, { cpu, mem })
+      }
+    }
+  }
+  try {
+    const data = JSON.parse(podsJson)
+    const items: any[] = data.items || []
+    return items.map((pod: any): PodDetail => {
+      const name = pod.metadata?.name || ""
+      const namespace = pod.metadata?.namespace || ""
+      const status = parsePodStatus(pod)
+      const age = formatAge(pod.metadata?.creationTimestamp || "")
+      const metrics = podMetrics.get(`${namespace}/${name}`)
+      return {
+        name,
+        namespace,
+        status,
+        cpu: metrics?.cpu || "──",
+        mem: metrics?.mem || "──",
+        age,
+      }
+    })
+  } catch {
+    return []
+  }
+}
+
+export async function fetchNamespaceDetailAsync(contextName: string, namespace: string): Promise<NamespaceDetailData> {
+  const [workloadsJson, podsJson, topPodsOutput, networkJson, configCmJson, configSecretJson] = await Promise.all([
+    kubectlContextAsync(contextName, `get deploy,sts,ds,job,cronjob -n ${namespace} -o json`, 10000),
+    kubectlContextAsync(contextName, `get pods -n ${namespace} -o json`, 5000),
+    kubectlContextAsync(contextName, `top pods -n ${namespace} --no-headers`, 5000),
+    kubectlContextAsync(contextName, `get svc,ingress -n ${namespace} -o json`, 10000),
+    kubectlContextAsync(contextName, `get cm -n ${namespace} -o json`, 5000),
+    kubectlContextAsync(contextName, `get secret -n ${namespace} -o json`, 5000),
+  ])
+
+  const workloads = parseNamespacedResources(workloadsJson)
+  const pods = parsePodsFromJson(podsJson, topPodsOutput)
+  const network = parseNamespacedResources(networkJson)
+  const configCm = parseNamespacedResources(configCmJson)
+  const configSecret = parseNamespacedResources(configSecretJson)
+  const config = [...configCm, ...configSecret]
+
+  return { workloads, pods, network, config }
+}
+
+export async function fetchWorkloadDetailAsync(contextName: string, namespace: string, kind: string, name: string): Promise<WorkloadDetailData> {
+  const kindFlag = kind.toLowerCase()
+  const [resourceJson, podsJson, topPodsOutput] = await Promise.all([
+    kubectlContextAsync(contextName, `get ${kindFlag} ${name} -n ${namespace} -o json`, 5000),
+    kubectlContextAsync(contextName, `get pods -n ${namespace} -o json`, 5000),
+    kubectlContextAsync(contextName, `top pods -n ${namespace} --no-headers`, 5000),
+  ])
+
+  let summary: DetailRow[] = []
+  let labelSelector = ""
+  if (resourceJson) {
+    try {
+      const obj = JSON.parse(resourceJson)
+      summary = buildSummaryRows(kind, obj)
+      labelSelector = Object.entries(obj.spec?.selector?.matchLabels || {}).map(([k, v]) => `${k}=${v}`).join(",")
+    } catch {}
+  }
+
+  let pods: PodDetail[] = []
+  if (podsJson) {
+    try {
+      const data = JSON.parse(podsJson)
+      const items: any[] = data.items || []
+      const matched = labelSelector
+        ? items.filter((pod: any) => {
+            const labels = pod.metadata?.labels || {}
+            return labelSelector.split(",").every((pair) => {
+              const parts = pair.split("=")
+              return labels[parts[0] ?? ""] === parts[1]
+            })
+          })
+        : items
+      const podMetrics = new Map<string, { cpu: string; mem: string }>()
+      if (topPodsOutput) {
+        for (const line of topPodsOutput.split("\n")) {
+          const parts = line.split(/\s+/).filter(Boolean)
+          if (parts.length >= 4) {
+            podMetrics.set(`${parts[0]}/${parts[1]}`, { cpu: parts[2] ?? "", mem: parts[3] ?? "" })
+          }
+        }
+      }
+      pods = matched.map((pod: any): PodDetail => {
+        const pName = pod.metadata?.name || ""
+        const pNs = pod.metadata?.namespace || namespace
+        const status = parsePodStatus(pod)
+        const age = formatAge(pod.metadata?.creationTimestamp || "")
+        const metrics = podMetrics.get(`${pNs}/${pName}`)
+        return { name: pName, namespace: pNs, status, cpu: metrics?.cpu || "──", mem: metrics?.mem || "──", age }
+      })
+    } catch {}
+  }
+
+  return { summary, pods }
+}
+
+export async function fetchNetworkDetailAsync(contextName: string, namespace: string, kind: string, name: string): Promise<NetworkDetailData> {
+  const kindFlag = kind === "Ingress" ? "ingress" : "service"
+  const [resourceJson, endpointsJson, podsJson, topPodsOutput] = await Promise.all([
+    kubectlContextAsync(contextName, `get ${kindFlag} ${name} -n ${namespace} -o json`, 5000),
+    kind === "Service" ? kubectlContextAsync(contextName, `get endpoints ${name} -n ${namespace} -o json`, 5000) : Promise.resolve(""),
+    kubectlContextAsync(contextName, `get pods -n ${namespace} -o json`, 5000),
+    kubectlContextAsync(contextName, `top pods -n ${namespace} --no-headers`, 5000),
+  ])
+
+  let summary: DetailRow[] = []
+  let targetPodNames = new Set<string>()
+  if (resourceJson) {
+    try {
+      const obj = JSON.parse(resourceJson)
+      summary = buildSummaryRows(kind, obj)
+      if (kind === "Service") {
+        const selector = obj.spec?.selector || {}
+        const labelSelector = Object.entries(selector).map(([k, v]) => `${k}=${v}`).join(",")
+        if (labelSelector && podsJson) {
+          try {
+            const data = JSON.parse(podsJson)
+            for (const pod of data.items || []) {
+              const labels = pod.metadata?.labels || {}
+              if (labelSelector.split(",").every((pair) => { const parts = pair.split("="); return labels[parts[0] ?? ""] === parts[1] })) {
+                targetPodNames.add(pod.metadata?.name || "")
+              }
+            }
+          } catch {}
+        }
+      }
+    } catch {}
+  }
+
+  const podMetrics = new Map<string, { cpu: string; mem: string }>()
+  if (topPodsOutput) {
+    for (const line of topPodsOutput.split("\n")) {
+      const parts = line.split(/\s+/).filter(Boolean)
+      if (parts.length >= 4) {
+        podMetrics.set(`${parts[0]}/${parts[1]}`, { cpu: parts[2] ?? "", mem: parts[3] ?? "" })
+      }
+    }
+  }
+
+  let pods: PodDetail[] = []
+  if (podsJson && targetPodNames.size > 0) {
+    try {
+      const data = JSON.parse(podsJson)
+      for (const pod of data.items || []) {
+        const pName = pod.metadata?.name || ""
+        if (!targetPodNames.has(pName)) continue
+        const pNs = pod.metadata?.namespace || namespace
+        const status = parsePodStatus(pod)
+        const age = formatAge(pod.metadata?.creationTimestamp || "")
+        const metrics = podMetrics.get(`${pNs}/${pName}`)
+        pods.push({ name: pName, namespace: pNs, status, cpu: metrics?.cpu || "──", mem: metrics?.mem || "──", age })
+      }
+    } catch {}
+  }
+
+  return { summary, pods }
+}
+
+export async function fetchStorageDetailAsync(contextName: string, namespace: string, name: string): Promise<StorageDetailData> {
+  const [pvcJson, podsJson, topPodsOutput] = await Promise.all([
+    kubectlContextAsync(contextName, `get pvc ${name} -n ${namespace} -o json`, 5000),
+    kubectlContextAsync(contextName, `get pods -n ${namespace} -o json`, 5000),
+    kubectlContextAsync(contextName, `top pods -n ${namespace} --no-headers`, 5000),
+  ])
+
+  let summary: DetailRow[] = []
+  let mountPod: PodDetail | null = null
+
+  if (pvcJson) {
+    try {
+      const obj = JSON.parse(pvcJson)
+      summary = buildSummaryRows("PersistentVolumeClaim", obj)
+    } catch {}
+  }
+
+  if (podsJson) {
+    try {
+      const data = JSON.parse(podsJson)
+      const podMetrics = new Map<string, { cpu: string; mem: string }>()
+      if (topPodsOutput) {
+        for (const line of topPodsOutput.split("\n")) {
+          const parts = line.split(/\s+/).filter(Boolean)
+          if (parts.length >= 4) {
+            podMetrics.set(`${parts[0]}/${parts[1]}`, { cpu: parts[2] ?? "", mem: parts[3] ?? "" })
+          }
+        }
+      }
+      for (const pod of data.items || []) {
+        const volumes: any[] = pod.spec?.volumes || []
+        const mounts = volumes.filter((v: any) => v.persistentVolumeClaim?.claimName === name)
+        if (mounts.length > 0) {
+          const pName = pod.metadata?.name || ""
+          const pNs = pod.metadata?.namespace || namespace
+          const status = parsePodStatus(pod)
+          const age = formatAge(pod.metadata?.creationTimestamp || "")
+          const metrics = podMetrics.get(`${pNs}/${pName}`)
+          mountPod = { name: pName, namespace: pNs, status, cpu: metrics?.cpu || "──", mem: metrics?.mem || "──", age }
+          break
+        }
+      }
+    } catch {}
+  }
+
+  return { summary, mountPod }
+}
+
+export async function fetchConfigDetailAsync(contextName: string, namespace: string, kind: string, name: string): Promise<ConfigDetailData> {
+  const kindFlag = kind === "Secret" ? "secret" : "configmap"
+  const [resourceJson, podsJson, topPodsOutput] = await Promise.all([
+    kubectlContextAsync(contextName, `get ${kindFlag} ${name} -n ${namespace} -o json`, 5000),
+    kubectlContextAsync(contextName, `get pods -n ${namespace} -o json`, 5000),
+    kubectlContextAsync(contextName, `top pods -n ${namespace} --no-headers`, 5000),
+  ])
+
+  let summary: DetailRow[] = []
+  let refPods: PodDetail[] = []
+
+  if (resourceJson) {
+    try {
+      const obj = JSON.parse(resourceJson)
+      summary = buildSummaryRows(kind, obj)
+    } catch {}
+  }
+
+  if (podsJson) {
+    try {
+      const data = JSON.parse(podsJson)
+      const podMetrics = new Map<string, { cpu: string; mem: string }>()
+      if (topPodsOutput) {
+        for (const line of topPodsOutput.split("\n")) {
+          const parts = line.split(/\s+/).filter(Boolean)
+          if (parts.length >= 4) {
+            podMetrics.set(`${parts[0]}/${parts[1]}`, { cpu: parts[2] ?? "", mem: parts[3] ?? "" })
+          }
+        }
+      }
+      for (const pod of data.items || []) {
+        const volumes: any[] = pod.spec?.volumes || []
+        const refs = volumes.filter((v: any) =>
+          (kind === "ConfigMap" && v.configMap?.name === name) ||
+          (kind === "Secret" && v.secret?.secretName === name)
+        )
+        let envRef = false
+        for (const c of pod.spec?.containers || []) {
+          for (const e of c.env || []) {
+            if (kind === "ConfigMap" && e.valueFrom?.configMapKeyRef?.name === name) envRef = true
+            if (kind === "Secret" && e.valueFrom?.secretKeyRef?.name === name) envRef = true
+          }
+          for (const ef of c.envFrom || []) {
+            if (kind === "ConfigMap" && ef.configMapRef?.name === name) envRef = true
+            if (kind === "Secret" && ef.secretRef?.name === name) envRef = true
+          }
+        }
+        if (refs.length > 0 || envRef) {
+          const pName = pod.metadata?.name || ""
+          const pNs = pod.metadata?.namespace || namespace
+          const status = parsePodStatus(pod)
+          const age = formatAge(pod.metadata?.creationTimestamp || "")
+          const metrics = podMetrics.get(`${pNs}/${pName}`)
+          refPods.push({ name: pName, namespace: pNs, status, cpu: metrics?.cpu || "──", mem: metrics?.mem || "──", age })
+        }
+      }
+    } catch {}
+  }
+
+  return { summary, pods: refPods }
 }
