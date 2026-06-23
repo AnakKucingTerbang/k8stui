@@ -6,13 +6,13 @@ import { ClusterListPage } from "./pages/ClusterListPage"
 import { ClusterDetailPage } from "./pages/ClusterDetailPage"
 import { NodeDetailPage } from "./pages/NodeDetailPage"
 import { PodDetailPage } from "./pages/PodDetailPage"
-import type { Cluster, KubeContext, MetricMode, NodeDetail, PodDetail, PodDetailFull } from "./types"
+import type { Cluster, KubeContext, MetricMode, NodeDetail, NamespaceInfo, ClusterResource, PodDetail, PodDetailFull } from "./types"
 import {
   loadContextsAsync,
   getCurrentContext,
   switchContext,
   fetchClusterStatusAsync,
-  fetchNodeDetailsAsync,
+  fetchClusterDetailDataAsync,
   fetchPodsForNodeAsync,
   fetchPodDetailAsync,
 } from "./kube"
@@ -47,6 +47,8 @@ export function App({ renderer }: AppProps) {
   const [page, setPage] = useState<Page>("cluster-list")
   const [selectedCluster, setSelectedCluster] = useState<Cluster | null>(null)
   const [nodeDetails, setNodeDetails] = useState<NodeDetail[]>([])
+  const [namespaces, setNamespaces] = useState<NamespaceInfo[]>([])
+  const [clusterResources, setClusterResources] = useState<ClusterResource[]>([])
   const [detailLoading, setDetailLoading] = useState(false)
 
   const [selectedNode, setSelectedNode] = useState<NodeDetail | null>(null)
@@ -147,10 +149,14 @@ export function App({ renderer }: AppProps) {
   const handleOpenCluster = useCallback((cluster: Cluster) => {
     setSelectedCluster(cluster)
     setNodeDetails([])
+    setNamespaces([])
+    setClusterResources([])
     setDetailLoading(true)
     setPage("cluster-detail")
-    fetchNodeDetailsAsync(currentContext).then((nodes) => {
-      setNodeDetails(nodes)
+    fetchClusterDetailDataAsync(currentContext).then((data) => {
+      setNodeDetails(data.nodes)
+      setNamespaces(data.namespaces)
+      setClusterResources(data.resources)
       setDetailLoading(false)
     })
   }, [currentContext])
@@ -248,6 +254,8 @@ export function App({ renderer }: AppProps) {
         <ClusterDetailPage
           cluster={selectedCluster}
           nodeDetails={nodeDetails}
+          namespaces={namespaces}
+          resources={clusterResources}
           loading={detailLoading}
           metricMode={metricMode}
           onOpenNode={handleOpenNode}

@@ -1,16 +1,22 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { useKeyboard, useTerminalDimensions } from "@opentui/react"
+import { useKeyboard } from "@opentui/react"
 import { t, fg } from "@opentui/core"
 import { ClusterOverview } from "../components/ClusterOverview"
 import { CommandsBar } from "../components/CommandsBar"
 import { NodeTable } from "../components/NodeTable"
-import type { Cluster, NodeDetail, MetricMode } from "../types"
+import { NamespaceTable } from "../components/NamespaceTable"
+import { ResourceTable } from "../components/ResourceTable"
+import type { Cluster, NamespaceInfo, ClusterResource, NodeDetail, MetricMode } from "../types"
 
 const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+
+type ClusterView = "nodes" | "namespaces" | "resources"
 
 interface ClusterDetailPageProps {
   cluster: Cluster
   nodeDetails: NodeDetail[]
+  namespaces: NamespaceInfo[]
+  resources: ClusterResource[]
   loading: boolean
   metricMode: MetricMode
   onOpenNode: (node: NodeDetail) => void
@@ -22,6 +28,8 @@ interface ClusterDetailPageProps {
 export function ClusterDetailPage({
   cluster,
   nodeDetails,
+  namespaces,
+  resources,
   loading,
   metricMode,
   onOpenNode,
@@ -29,11 +37,18 @@ export function ClusterDetailPage({
   onToggleMetric,
   onQuit,
 }: ClusterDetailPageProps) {
-  const [nodeListIndex, setNodeListIndex] = useState(0)
-  const [nodeScrollOffset, setNodeScrollOffset] = useState(0)
+  const [view, setView] = useState<ClusterView>("nodes")
   const [spinnerFrame, setSpinnerFrame] = useState(0)
   const spinnerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const spinner = SPINNER_FRAMES[spinnerFrame % SPINNER_FRAMES.length] ?? "⠋"
+
+  const [nodeListIndex, setNodeListIndex] = useState(0)
+  const [nsListIndex, setNsListIndex] = useState(0)
+  const [resourceListIndex, setResourceListIndex] = useState(0)
+
+  const nodeScrollRef = useRef<any>(null)
+  const nsScrollRef = useRef<any>(null)
+  const resourceScrollRef = useRef<any>(null)
 
   useEffect(() => {
     if (!loading) {
@@ -44,31 +59,71 @@ export function ClusterDetailPage({
     return () => { if (spinnerRef.current) { clearInterval(spinnerRef.current); spinnerRef.current = null } }
   }, [loading])
 
-  const { height: termHeight } = useTerminalDimensions()
-  const maxNodeRows = Math.max(1, termHeight - 20)
+  const scrollIntoView = useCallback((scrollRef: React.RefObject<any>, id: string) => {
+    scrollRef.current?.scrollChildIntoView?.(id)
+  }, [])
 
   const handleKey = useCallback(
     (key: { name: string }) => {
       if (key.name === "escape") {
         onBack()
+      } else if (key.name === "1") {
+        setView("nodes")
+        setNodeListIndex(0)
+      } else if (key.name === "2") {
+        setView("namespaces")
+        setNsListIndex(0)
+      } else if (key.name === "3") {
+        setView("resources")
+        setResourceListIndex(0)
       } else if (key.name === "up") {
-        if (nodeListIndex > 0) {
-          setNodeListIndex((i: number) => i - 1)
-          if (nodeListIndex <= nodeScrollOffset) {
-            setNodeScrollOffset((i: number) => Math.max(0, i - 1))
+        if (view === "nodes") {
+          if (nodeListIndex > 0) {
+            const newIdx = nodeListIndex - 1
+            setNodeListIndex(newIdx)
+            scrollIntoView(nodeScrollRef, `node-${newIdx}`)
+          }
+        } else if (view === "namespaces") {
+          if (nsListIndex > 0) {
+            const newIdx = nsListIndex - 1
+            setNsListIndex(newIdx)
+            scrollIntoView(nsScrollRef, `ns-${newIdx}`)
+          }
+        } else if (view === "resources") {
+          if (resourceListIndex > 0) {
+            const newIdx = resourceListIndex - 1
+            setResourceListIndex(newIdx)
+            if (newIdx === 0) {
+              resourceScrollRef.current?.scrollTo?.(0)
+            } else {
+              scrollIntoView(resourceScrollRef, `res-${newIdx}`)
+            }
           }
         }
       } else if (key.name === "down") {
-        if (nodeListIndex < nodeDetails.length - 1) {
-          setNodeListIndex((i: number) => i + 1)
-          if (nodeListIndex >= nodeScrollOffset + maxNodeRows - 1) {
-            setNodeScrollOffset((i: number) => i + 1)
+        if (view === "nodes") {
+          if (nodeListIndex < nodeDetails.length - 1) {
+            const newIdx = nodeListIndex + 1
+            setNodeListIndex(newIdx)
+            scrollIntoView(nodeScrollRef, `node-${newIdx}`)
+          }
+        } else if (view === "namespaces") {
+          if (nsListIndex < namespaces.length - 1) {
+            const newIdx = nsListIndex + 1
+            setNsListIndex(newIdx)
+            scrollIntoView(nsScrollRef, `ns-${newIdx}`)
+          }
+        } else if (view === "resources") {
+          if (resourceListIndex < resources.length - 1) {
+            const newIdx = resourceListIndex + 1
+            setResourceListIndex(newIdx)
+            scrollIntoView(resourceScrollRef, `res-${newIdx}`)
           }
         }
       } else if (key.name === "return") {
-        const node = nodeDetails[nodeListIndex]
-        if (node) {
-          onOpenNode(node)
+        if (view === "nodes") {
+          const node = nodeDetails[nodeListIndex]
+          if (node) onOpenNode(node)
         }
       } else if (key.name === "m") {
         onToggleMetric()
@@ -76,14 +131,20 @@ export function ClusterDetailPage({
         onQuit()
       }
     },
-    [nodeListIndex, nodeScrollOffset, nodeDetails.length, maxNodeRows, onOpenNode, onBack, onToggleMetric, onQuit],
+    [view, nodeListIndex, nodeDetails.length, nsListIndex, namespaces.length, resourceListIndex, resources.length, onOpenNode, onBack, onToggleMetric, onQuit, scrollIntoView],
   )
 
   useKeyboard(handleKey)
 
-  const commands = useMemo(() => t`${fg("#58A6FF")("[enter]")} node  ${fg("#58A6FF")("[esc]")} back  ${fg("#58A6FF")("[m]")}etric  ${fg("#58A6FF")("[q]")}uit`, [])
+  const tabTitle = useMemo(() => {
+    if (view === "nodes") return "NODES"
+    if (view === "namespaces") return "NAMESPACES"
+    return "RESOURCES"
+  }, [view])
 
-  const visibleNodes = nodeDetails.slice(nodeScrollOffset, nodeScrollOffset + maxNodeRows)
+  const commands = useMemo(() => {
+    return t`${fg("#58A6FF")("[1]")} ${fg("#8B949E")("nodes  ")}${fg("#58A6FF")("[2]")} ${fg("#8B949E")("namespaces  ")}${fg("#58A6FF")("[3]")} ${fg("#8B949E")("resources  ")}${fg("#58A6FF")("[m]")} ${fg("#8B949E")("etric  ")}${fg("#58A6FF")("[esc]")} ${fg("#8B949E")("back  ")}${fg("#58A6FF")("[q]")} ${fg("#8B949E")("uit")}`
+  }, [])
 
   return (
     <>
@@ -96,22 +157,34 @@ export function ClusterDetailPage({
         <ClusterOverview cluster={cluster} metricMode={metricMode} />
       </box>
       <box
-        title="NODES"
+        title={tabTitle}
         borderStyle="single"
-        borderColor="#30363D"
+        borderColor="#58A6FF"
         style={{ flexDirection: "column", flexGrow: 1, width: "100%" }}
       >
         {loading ? (
           <box style={{ flexDirection: "column", alignItems: "center", justifyContent: "center", flexGrow: 1 }}>
-            <text content={t`${fg("#D29922")(spinner)} ${fg("#8B949E")("Loading node data...")}`} />
+            <text content={t`${fg("#D29922")(spinner)} ${fg("#8B949E")("Loading cluster data...")}`} />
             <text fg="#484F58" content={`Fetching from ${cluster.name}...`} />
           </box>
-        ) : (
+        ) : view === "nodes" ? (
           <NodeTable
-            nodes={visibleNodes}
+            nodes={nodeDetails}
             selectedIndex={nodeListIndex}
-            scrollOffset={nodeScrollOffset}
             metricMode={metricMode}
+            scrollRef={nodeScrollRef}
+          />
+        ) : view === "namespaces" ? (
+          <NamespaceTable
+            namespaces={namespaces}
+            selectedIndex={nsListIndex}
+            scrollRef={nsScrollRef}
+          />
+        ) : (
+          <ResourceTable
+            resources={resources}
+            selectedIndex={resourceListIndex}
+            scrollRef={resourceScrollRef}
           />
         )}
       </box>

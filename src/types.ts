@@ -99,3 +99,22 @@ export interface PodDetailFull {
   ownerKind: string
   ownerName: string
 }
+
+export interface NamespaceInfo {
+  name: string
+  age: string
+  pods: number
+  workloads: number
+  network: number
+  storage: number
+  config: number
+}
+
+export type ResourceCategory = "workloads" | "network" | "storage" | "configuration"
+
+export interface ClusterResource {
+  kind: string
+  name: string
+  namespace: string
+  category: ResourceCategory
+}

@@ -1,6 +1,6 @@
 import { exec, execSync } from "child_process"
 import { dump } from "js-yaml"
-import type { Cluster, ClusterStatus, KubeContext, NodeDetail, PodDetail, PodDetailFull, PodContainer, ApplicationResource, DetailRow } from "./types"
+import type { Cluster, ClusterStatus, KubeContext, NodeDetail, PodDetail, PodDetailFull, PodContainer, ApplicationResource, DetailRow, NamespaceInfo, ClusterResource, ResourceCategory } from "./types"
 
 function kubectlAsync(args: string, timeout = 5000): Promise<string> {
   return new Promise((resolve) => {
@@ -851,4 +851,126 @@ export async function fetchPodDetailAsync(
   } catch {
     return null
   }
+}
+
+const KIND_CATEGORY: Record<string, ResourceCategory> = {
+  Deployment: "workloads",
+  StatefulSet: "workloads",
+  DaemonSet: "workloads",
+  Job: "workloads",
+  CronJob: "workloads",
+  ReplicaSet: "workloads",
+  Service: "network",
+  Ingress: "network",
+  NetworkPolicy: "network",
+  PersistentVolumeClaim: "storage",
+  PersistentVolume: "storage",
+  StorageClass: "storage",
+  ConfigMap: "configuration",
+  Secret: "configuration",
+}
+
+function classifyResource(kind: string): ResourceCategory {
+  return KIND_CATEGORY[kind] || "configuration"
+}
+
+export async function fetchNamespacesAsync(contextName: string): Promise<NamespaceInfo[]> {
+  const nsJson = await kubectlContextAsync(contextName, "get namespaces -o json", 5000)
+  if (!nsJson) return []
+
+  try {
+    const data = JSON.parse(nsJson)
+    const items: any[] = data.items || []
+    return items.map((ns: any): NamespaceInfo => ({
+      name: ns.metadata?.name || "",
+      age: formatAge(ns.metadata?.creationTimestamp || ""),
+      pods: 0,
+      workloads: 0,
+      network: 0,
+      storage: 0,
+      config: 0,
+    }))
+  } catch {
+    return []
+  }
+}
+
+async function fetchCategoryAsync(
+  contextName: string,
+  kinds: string,
+  category: ResourceCategory,
+): Promise<ClusterResource[]> {
+  try {
+    const json = await kubectlContextAsync(contextName, `get ${kinds} -A -o json`, 10000)
+    if (!json) return []
+    const data = JSON.parse(json)
+    const items: any[] = data.items || []
+    return items.map((item: any): ClusterResource => ({
+      kind: item.kind || "",
+      name: item.metadata?.name || "",
+      namespace: item.metadata?.namespace || "",
+      category,
+    }))
+  } catch {
+    return []
+  }
+}
+
+export async function fetchClusterResourcesAsync(contextName: string): Promise<ClusterResource[]> {
+  const [workloads, network, storage, configmaps, secrets] = await Promise.all([
+    fetchCategoryAsync(contextName, "deploy,sts,ds,rs", "workloads"),
+    fetchCategoryAsync(contextName, "svc,ingress", "network"),
+    fetchCategoryAsync(contextName, "pvc", "storage"),
+    fetchCategoryAsync(contextName, "cm", "configuration"),
+    fetchCategoryAsync(contextName, "secret", "configuration"),
+  ])
+  return [...workloads, ...network, ...storage, ...configmaps, ...secrets]
+}
+
+export interface ClusterDetailData {
+  nodes: NodeDetail[]
+  namespaces: NamespaceInfo[]
+  resources: ClusterResource[]
+}
+
+export async function fetchClusterDetailDataAsync(contextName: string): Promise<ClusterDetailData> {
+  const [nodesResult, namespacesRaw, resourcesRaw, podsJson] = await Promise.all([
+    fetchNodeDetailsAsync(contextName),
+    fetchNamespacesAsync(contextName),
+    fetchClusterResourcesAsync(contextName),
+    kubectlContextAsync(contextName, "get pods -A -o json", 5000),
+  ])
+
+  const podCountsByNs = new Map<string, number>()
+  if (podsJson) {
+    try {
+      const data = JSON.parse(podsJson)
+      for (const pod of data.items || []) {
+        const ns = pod.metadata?.namespace || ""
+        podCountsByNs.set(ns, (podCountsByNs.get(ns) || 0) + 1)
+      }
+    } catch {}
+  }
+
+  const resourceCountsByNs = new Map<string, Record<ResourceCategory, number>>()
+  for (const r of resourcesRaw) {
+    const ns = r.namespace
+    const counts = resourceCountsByNs.get(ns) || { workloads: 0, network: 0, storage: 0, configuration: 0 }
+    counts[r.category]++
+    resourceCountsByNs.set(ns, counts)
+  }
+
+  const namespaces = namespacesRaw.map((ns): NamespaceInfo => {
+    const counts = resourceCountsByNs.get(ns.name) || { workloads: 0, network: 0, storage: 0, configuration: 0 }
+    return {
+      ...ns,
+      pods: podCountsByNs.get(ns.name) || 0,
+      workloads: counts.workloads,
+      network: counts.network,
+      storage: counts.storage,
+      config: counts.configuration,
+    }
+  })
+
+  return { nodes: nodesResult, namespaces, resources: resourcesRaw }
 }

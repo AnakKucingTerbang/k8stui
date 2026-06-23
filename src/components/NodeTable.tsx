@@ -34,36 +34,43 @@ const SEP = "  "
 interface NodeTableProps {
   nodes: NodeDetail[]
   selectedIndex: number
-  scrollOffset: number
   metricMode: MetricMode
+  scrollRef: React.RefObject<any>
 }
 
-export function NodeTable({ nodes, selectedIndex, scrollOffset, metricMode }: NodeTableProps) {
+export function NodeTable({ nodes, selectedIndex, metricMode, scrollRef }: NodeTableProps) {
   const headerContent = t`${bold(fg("#E6EDF3")(pad("NAME", COL.name)))}${SEP}${bold(fg("#E6EDF3")(lpad("CPU", COL.cpu)))}${SEP}${bold(fg("#E6EDF3")(lpad("MEM", COL.mem)))}${SEP}${bold(fg("#E6EDF3")(lpad("AGE", COL.age)))}${SEP}${bold(fg("#E6EDF3")(lpad("PODS", COL.pods)))}`
 
   return (
-    <box style={{ flexDirection: "column", paddingLeft: 1, paddingRight: 1, gap: 0 }}>
-      <text content={headerContent} />
-      {nodes.map((node, i) => {
-        const realIndex = scrollOffset + i
-        const isSelected = realIndex === selectedIndex
-        const bgColor = isSelected ? "#1A3A5C" : undefined
-        const textColor = isSelected ? "#E6EDF3" : "#8B949E"
-        const podsStr = node.ready ? `${node.podsUsed}/${node.podsTotal}` : "──"
-        const cpuStr = metricMode === "raw"
-          ? formatRaw(node.cpu, node.ready, COL.cpu)
-          : formatPct(node.cpuPct, node.ready, COL.cpu)
-        const memStr = metricMode === "raw"
-          ? formatRaw(node.mem, node.ready, COL.mem)
-          : formatPct(node.memPct, node.ready, COL.mem)
-        const content = t`${fg(textColor)(pad(node.name, COL.name))}${SEP}${fg(textColor)(cpuStr)}${SEP}${fg(textColor)(memStr)}${SEP}${fg(textColor)(lpad(node.age, COL.age))}${SEP}${fg(textColor)(lpad(podsStr, COL.pods))}`
+    <box style={{ flexDirection: "column", width: "100%", flexGrow: 1, paddingLeft: 1, paddingRight: 1 }}>
+      <text content={headerContent} style={{ height: 1, flexShrink: 0 }} />
+      <scrollbox
+        ref={scrollRef}
+        scrollY={true}
+        viewportCulling={true}
+        style={{ width: "100%", flexGrow: 1 }}
+        contentOptions={{ minHeight: "100%" }}
+      >
+        {nodes.map((node, i) => {
+          const isSelected = i === selectedIndex
+          const bgColor = isSelected ? "#1A3A5C" : undefined
+          const textColor = isSelected ? "#E6EDF3" : "#8B949E"
+          const podsStr = node.ready ? `${node.podsUsed}/${node.podsTotal}` : "──"
+          const cpuStr = metricMode === "raw"
+            ? formatRaw(node.cpu, node.ready, COL.cpu)
+            : formatPct(node.cpuPct, node.ready, COL.cpu)
+          const memStr = metricMode === "raw"
+            ? formatRaw(node.mem, node.ready, COL.mem)
+            : formatPct(node.memPct, node.ready, COL.mem)
+          const content = t`${fg(textColor)(pad(node.name, COL.name))}${SEP}${fg(textColor)(cpuStr)}${SEP}${fg(textColor)(memStr)}${SEP}${fg(textColor)(lpad(node.age, COL.age))}${SEP}${fg(textColor)(lpad(podsStr, COL.pods))}`
 
-        return (
-          <box key={node.name} style={{ height: 1, width: "100%", backgroundColor: bgColor }}>
-            <text content={content} />
-          </box>
-        )
-      })}
+          return (
+            <box key={node.name} id={`node-${i}`} style={{ height: 1, width: "100%", backgroundColor: bgColor }}>
+              <text content={content} />
+            </box>
+          )
+        })}
+      </scrollbox>
     </box>
   )
 }
