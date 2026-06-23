@@ -1,5 +1,19 @@
 # Changelog
 
+# [0.4.0](https://github.com/AnakKucingTerbang/k8stui/compare/v0.3.0...v0.4.0) (2026-06-23)
+
+
+### Bug Fixes
+
+* **cluster:** re-anchor selection to viewport after mouse scroll ([76d96ea](https://github.com/AnakKucingTerbang/k8stui/commit/76d96ea77fb5e9ab6063a86a888e5a3c6dd8004b))
+
+
+### Features
+
+* **cluster:** add namespace and resource views with sticky table headers ([8b0f287](https://github.com/AnakKucingTerbang/k8stui/commit/8b0f28720cea0b3a520b8fb9549380c97f4a2751))
+* **nav:** add nav stack, namespace/resource detail pages, and node conditions view ([b80b894](https://github.com/AnakKucingTerbang/k8stui/commit/b80b894db6fb164c2dc2e239dd60231fed53178e))
+* **secrets:** add dedicated SecretPage with two-column layout, lazy decode, and revealed keys scroll ([b7994b0](https://github.com/AnakKucingTerbang/k8stui/commit/b7994b01da089158cfd8dac8fe618fc182bc2882))
+
 # 0.3.0 (2026-06-23)
 
 
