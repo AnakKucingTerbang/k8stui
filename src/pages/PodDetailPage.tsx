@@ -6,15 +6,18 @@ import { ContainersBox } from "../components/ContainersBox"
 import { ApplicationBox } from "../components/ApplicationBox"
 import { ManifestsBox, type ManifestItem } from "../components/ManifestsBox"
 import { DetailsPanel, getSelectedRowDisplay } from "../components/DetailsPanel"
+import { LogsBox } from "../components/LogsBox"
+import { LogView } from "../components/LogView"
 import { CommandsBar } from "../components/CommandsBar"
 import { Toast } from "../components/Toast"
 import { copyToClipboard } from "../clipboard"
 import { applyYamlAsync } from "../kube"
+import { streamPodLogs, trimLogBuffer, getSinceOption, SINCE_OPTIONS, type LogStreamHandle } from "../kube-logs"
 import type { PodDetail, PodDetailFull, PodContainer, DetailRow } from "../types"
 
 const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
 
-type LeftBox = "containers" | "application" | "manifests"
+type LeftBox = "containers" | "application" | "manifests" | "logs"
 type FocusTarget = LeftBox | "details"
 type YamlEditMode = "view" | "edit"
 
@@ -86,7 +89,7 @@ interface PodDetailPageProps {
   contextName: string
 }
 
-const LEFT_ORDER: LeftBox[] = ["containers", "application", "manifests"]
+const LEFT_ORDER: LeftBox[] = ["containers", "application", "manifests", "logs"]
 
 export function PodDetailPage({
   pod,
@@ -102,11 +105,26 @@ export function PodDetailPage({
   const [appResourceIndex, setAppResourceIndex] = useState(0)
   const [manifestIndex, setManifestIndex] = useState(0)
 
+  const [logs, setLogs] = useState<string[]>([])
+  const [logsStreaming, setLogsStreaming] = useState(false)
+  const [logsSinceKey, setLogsSinceKey] = useState("0")
+  const [logsPrevious, setLogsPrevious] = useState(false)
+  const [logsWrap, setLogsWrap] = useState(true)
+
   useEffect(() => {
     setContainerIndex(0)
     setAppResourceIndex(0)
     setManifestIndex(0)
   }, [pod.name])
+
+  useEffect(() => {
+    setLogs([])
+    setLogsStreaming(false)
+    setLogsSinceKey("0")
+    setLogsPrevious(false)
+    setLogsWrap(true)
+  }, [pod.name])
+
   const [detailScrollOffset, setDetailScrollOffset] = useState(0)
   const [detailRowIndex, setDetailRowIndex] = useState(-1)
   const [yamlEditMode, setYamlEditMode] = useState<YamlEditMode>("view")
@@ -116,7 +134,9 @@ export function PodDetailPage({
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const spinnerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const yamlScrollRef = useRef<any>(null)
+  const logsScrollRef = useRef<any>(null)
   const textareaRef = useRef<any>(null)
+  const logStreamRef = useRef<LogStreamHandle | null>(null)
   const renderer = useRenderer()
 
   const localSpinner = SPINNER_FRAMES[spinnerFrame % SPINNER_FRAMES.length] ?? "⠋"
@@ -144,6 +164,71 @@ export function PodDetailPage({
 
   const { height: termHeight } = useTerminalDimensions()
   const maxVisibleRows = Math.max(1, termHeight - 24)
+
+  const currentSince = getSinceOption(logsSinceKey)
+  const sinceLabel = currentSince?.label ?? "LIVE"
+
+  const startLogStream = useCallback((containerName: string, sinceKey: string, previous: boolean) => {
+    if (logStreamRef.current) {
+      logStreamRef.current.abort()
+      logStreamRef.current = null
+    }
+
+    const since = getSinceOption(sinceKey)
+    if (!since || !containerName || !contextName || !pod.name || !pod.namespace) {
+      setLogsStreaming(false)
+      return
+    }
+
+    setLogsStreaming(true)
+    setLogs([])
+
+    const opts: import("../kube-logs").StreamLogOptions = {
+      contextName,
+      podName: pod.name,
+      namespace: pod.namespace,
+      containerName,
+      follow: !previous,
+      previous,
+      tailLines: since.tailLines ?? 100,
+      sinceSeconds: since.sinceSeconds,
+      timestamps: true,
+      onLine: (line) => {
+        setLogs((prev) => trimLogBuffer([...prev, line]))
+      },
+      onError: (err: Error) => {
+        setToastMessage(`Log error: ${err.message}`)
+        if (toastTimerRef.current) clearTimeout(toastTimerRef.current)
+        toastTimerRef.current = setTimeout(() => setToastMessage(""), 5000)
+      },
+      onEnd: () => {
+        setLogsStreaming(false)
+      },
+    }
+
+    logStreamRef.current = streamPodLogs(opts)
+  }, [contextName, pod.name, pod.namespace])
+
+  useEffect(() => {
+    const containerName = podDetailFull?.containers[containerIndex]?.name
+    if (lastLeftBox === "logs" && containerName) {
+      startLogStream(containerName, logsSinceKey, logsPrevious)
+    }
+    if (lastLeftBox !== "logs" && logStreamRef.current) {
+      logStreamRef.current.abort()
+      logStreamRef.current = null
+      setLogsStreaming(false)
+    }
+  }, [containerIndex, lastLeftBox, podDetailFull?.containers, logsSinceKey, logsPrevious, startLogStream])
+
+  useEffect(() => {
+    return () => {
+      if (logStreamRef.current) {
+        logStreamRef.current.abort()
+        logStreamRef.current = null
+      }
+    }
+  }, [])
 
   const manifestItems: ManifestItem[] | undefined = useMemo(() => {
     if (!podDetailFull) return undefined
@@ -189,6 +274,8 @@ export function PodDetailPage({
     return detailsYaml || ""
   }, [yamlEditMode, editedYaml, detailsYaml])
 
+  const isLogsView = lastLeftBox === "logs"
+
   const leftBoxFocused = (box: LeftBox): boolean => focus === box
 
   const currentLeftIndex = LEFT_ORDER.indexOf(focus as LeftBox)
@@ -225,7 +312,9 @@ export function PodDetailPage({
           yamlScrollRef.current?.scrollBy({ x: -5, y: 0 })
         }
       } else if (key.name === "up") {
-        if (focus === "details") {
+        if (focus === "details" && isLogsView) {
+          logsScrollRef.current?.scrollBy(-1)
+        } else if (focus === "details") {
           if (detailsRows && !isYamlDetails) {
             if (detailRowIndex > 0) {
               setDetailRowIndex((i) => i - 1)
@@ -249,9 +338,15 @@ export function PodDetailPage({
           if (manifestIndex > 0) setManifestIndex((i) => i - 1)
           setDetailScrollOffset(0)
           setDetailRowIndex(-1)
+        } else if (focus === "logs") {
+          if (containerIndex > 0) setContainerIndex((i) => i - 1)
+          setDetailScrollOffset(0)
+          setDetailRowIndex(-1)
         }
       } else if (key.name === "down") {
-        if (focus === "details") {
+        if (focus === "details" && isLogsView) {
+          logsScrollRef.current?.scrollBy(1)
+        } else if (focus === "details") {
           if (detailsRows && !isYamlDetails) {
             const maxIdx = detailsRows.length - 1
             if (detailRowIndex < maxIdx) setDetailRowIndex((i) => Math.min(maxIdx, i + 1))
@@ -275,6 +370,11 @@ export function PodDetailPage({
           if (manifestIndex < max - 1) setManifestIndex((i) => i + 1)
           setDetailScrollOffset(0)
           setDetailRowIndex(-1)
+        } else if (focus === "logs") {
+          const max = podDetailFull?.containers.length ?? 0
+          if (containerIndex < max - 1) setContainerIndex((i) => i + 1)
+          setDetailScrollOffset(0)
+          setDetailRowIndex(-1)
         }
       } else if (key.name === "return") {
         if (focus === "details" && detailsRows && detailRowIndex >= 0) {
@@ -291,13 +391,49 @@ export function PodDetailPage({
           setYamlEditMode("edit")
           setEditedYaml(activeYaml)
         }
+      } else if (key.name === "w") {
+        if (isLogsView) {
+          setLogsWrap((v) => !v)
+        }
+      } else if (key.name === "p") {
+        if (isLogsView) {
+          setLogsPrevious((v) => !v)
+        }
+      } else if (key.name === "[") {
+        if (focus === "details" && isLogsView && !logsWrap) {
+          logsScrollRef.current?.scrollBy({ x: -5, y: 0 })
+        }
+      } else if (key.name === "]") {
+        if (focus === "details" && isLogsView && !logsWrap) {
+          logsScrollRef.current?.scrollBy({ x: 5, y: 0 })
+        }
+      } else if (key.name === "0") {
+        if (isLogsView) {
+          setLogsSinceKey("0")
+        }
+      } else if (key.name === "1") {
+        if (isLogsView) {
+          setLogsSinceKey("1")
+        }
+      } else if (key.name === "2") {
+        if (isLogsView) {
+          setLogsSinceKey("2")
+        }
+      } else if (key.name === "3") {
+        if (isLogsView) {
+          setLogsSinceKey("3")
+        }
       } else if (key.name === "pageup") {
-        if (focus === "details") {
+        if (focus === "details" && isLogsView) {
+          logsScrollRef.current?.scrollBy(-maxVisibleRows)
+        } else if (focus === "details") {
           if (isYamlDetails && yamlEditMode === "view") yamlScrollRef.current?.scrollBy(-maxVisibleRows)
           else if (detailsRows && !isYamlDetails) setDetailScrollOffset((i) => Math.max(0, i - maxVisibleRows))
         }
       } else if (key.name === "pagedown") {
-        if (focus === "details") {
+        if (focus === "details" && isLogsView) {
+          logsScrollRef.current?.scrollBy(maxVisibleRows)
+        } else if (focus === "details") {
           if (isYamlDetails && yamlEditMode === "view") yamlScrollRef.current?.scrollBy(maxVisibleRows)
           else if (detailsRows && !isYamlDetails) {
             const maxOff = Math.max(0, detailsRows.length - maxVisibleRows)
@@ -305,12 +441,16 @@ export function PodDetailPage({
           }
         }
       } else if (key.name === "home") {
-        if (focus === "details") {
+        if (focus === "details" && isLogsView) {
+          logsScrollRef.current?.scrollTo(0)
+        } else if (focus === "details") {
           if (isYamlDetails && yamlEditMode === "view") yamlScrollRef.current?.scrollTo(0)
           else { setDetailScrollOffset(0); setDetailRowIndex(0) }
         }
       } else if (key.name === "end") {
-        if (focus === "details") {
+        if (focus === "details" && isLogsView) {
+          logsScrollRef.current?.scrollTo(logsScrollRef.current?.scrollHeight ?? 0)
+        } else if (focus === "details") {
           if (isYamlDetails && yamlEditMode === "view") {
             yamlScrollRef.current?.scrollTo(yamlScrollRef.current?.scrollHeight ?? 0)
           } else if (detailsRows) {
@@ -325,7 +465,7 @@ export function PodDetailPage({
     [
       focus, lastLeftBox, containerIndex, appResourceIndex, manifestIndex,
       podDetailFull, manifestItems?.length, detailsRows, detailRowIndex,
-      isYamlDetails, yamlEditMode, canEdit, activeYaml, maxVisibleRows,
+      isYamlDetails, isLogsView, logsPrevious, logsWrap, yamlEditMode, canEdit, activeYaml, maxVisibleRows,
       detailScrollOffset, onBack, onQuit,
     ],
   )
@@ -384,6 +524,12 @@ export function PodDetailPage({
   }, [lastLeftBox, podDetailFull, manifestIndex, isLiveManifest])
 
   const selectedDisplay = useMemo(() => {
+    if (isLogsView) {
+      const containerName = podDetailFull?.containers[containerIndex]?.name || "──"
+      const liveTag = logsStreaming ? fg("#3FB950")("live") : fg("#F85149")("stopped")
+      const prevTag = logsPrevious ? fg("#D29922")("previous") : fg("#8B949E")("current")
+      return t`${fg("#8B949E")("container")} ${fg("#E6EDF3")(containerName)} ${fg("#484F58")("·")} ${prevTag} ${fg("#484F58")("·")} ${liveTag} ${fg("#484F58")("·")} ${fg("#8B949E")(sinceLabel)}`
+    }
     if (isYamlDetails) {
       if (yamlEditMode === "edit") {
         return t`${fg("#F85149")("editing")} ${fg("#8B949E")(editingLabel)}`
@@ -401,11 +547,17 @@ export function PodDetailPage({
       return t`${bold(fg("#58A6FF")(display))}`
     }
     return DASH
-  }, [isYamlDetails, yamlEditMode, detailsRows, detailRowIndex, podDetailFull])
+  }, [isLogsView, isYamlDetails, yamlEditMode, detailsRows, detailRowIndex, podDetailFull, containerIndex, logsStreaming, logsPrevious, sinceLabel, editingLabel])
 
   const commands = useMemo(() => {
     if (yamlEditMode === "edit") {
       return t`${fg("#58A6FF")("[ctrl+enter]")} ${fg("#8B949E")("apply  ")}${fg("#58A6FF")("[esc]")} ${fg("#8B949E")("cancel")}`
+    }
+    if (focus === "details" && isLogsView) {
+      if (!logsWrap) {
+        return t`${fg("#58A6FF")("[↑↓]")} ${fg("#8B949E")("scroll  ")}${fg("#58A6FF")("[w]")} ${fg("#8B949E")("wrap  ")}${fg("#58A6FF")("[p]")} ${fg("#8B949E")("prev  ")}${fg("#58A6FF")("[0]")} ${fg("#8B949E")("live  ")}${fg("#58A6FF")("[1]")} ${fg("#8B949E")("5m  ")}${fg("#58A6FF")("[2]")} ${fg("#8B949E")("30m  ")}${fg("#58A6FF")("[3]")} ${fg("#8B949E")("3h  ")}${fg("#58A6FF")("[ [ ] ]")} ${fg("#8B949E")("horiz  ")}${fg("#58A6FF")("[esc]")} ${fg("#8B949E")("back  ")}${fg("#58A6FF")("[q]")} ${fg("#8B949E")("uit")}`
+      }
+      return t`${fg("#58A6FF")("[↑↓]")} ${fg("#8B949E")("scroll  ")}${fg("#58A6FF")("[w]")} ${fg("#8B949E")("nowrap  ")}${fg("#58A6FF")("[p]")} ${fg("#8B949E")("prev  ")}${fg("#58A6FF")("[0]")} ${fg("#8B949E")("live  ")}${fg("#58A6FF")("[1]")} ${fg("#8B949E")("5m  ")}${fg("#58A6FF")("[2]")} ${fg("#8B949E")("30m  ")}${fg("#58A6FF")("[3]")} ${fg("#8B949E")("3h  ")}${fg("#58A6FF")("[esc]")} ${fg("#8B949E")("back  ")}${fg("#58A6FF")("[q]")} ${fg("#8B949E")("uit")}`
     }
     if (focus === "details") {
       if (isYamlDetails && yamlEditMode === "view") {
@@ -419,14 +571,21 @@ export function PodDetailPage({
       }
       return t`${fg("#58A6FF")("[←]")} ${fg("#8B949E")("focus left  ")}${fg("#58A6FF")("[esc]")} ${fg("#8B949E")("back  ")}${fg("#58A6FF")("[q]")} ${fg("#8B949E")("uit")}`
     }
+    if (focus === "logs") {
+      return t`${fg("#58A6FF")("[→]")} ${fg("#8B949E")("logs  ")}${fg("#58A6FF")("[↑↓]")} ${fg("#8B949E")("container  ")}${fg("#58A6FF")("[esc]")} ${fg("#8B949E")("back  ")}${fg("#58A6FF")("[q]")} ${fg("#8B949E")("uit")}`
+    }
     return t`${fg("#58A6FF")("[tab]")} ${fg("#8B949E")("cycle  ")}${fg("#58A6FF")("[→]")} ${fg("#8B949E")("details  ")}${fg("#58A6FF")("[↑↓]")} ${fg("#8B949E")("nav  ")}${fg("#58A6FF")("[esc]")} ${fg("#8B949E")("back  ")}${fg("#58A6FF")("[q]")} ${fg("#8B949E")("uit")}`
-  }, [yamlEditMode, focus, isYamlDetails, canEdit, detailsRows])
+  }, [yamlEditMode, focus, isYamlDetails, isLogsView, canEdit, detailsRows, logsWrap])
 
   const detailsBorderColor = useMemo(() => {
     if (yamlEditMode === "edit") return "#F85149"
+    if (focus === "details" && isLogsView) {
+      if (logsPrevious) return "#D29922"
+      return logsStreaming ? "#3FB950" : "#58A6FF"
+    }
     if (focus === "details") return "#58A6FF"
     return "#30363D"
-  }, [yamlEditMode, focus])
+  }, [yamlEditMode, focus, isLogsView, logsStreaming, logsPrevious])
 
   const detailsTitle = useMemo(() => {
     if (yamlEditMode === "edit") {
@@ -446,8 +605,13 @@ export function PodDetailPage({
       const item = manifestItems[manifestIndex]
       return item?.label || "MANIFEST"
     }
+    if (lastLeftBox === "logs") {
+      const containerName = podDetailFull?.containers[containerIndex]?.name || "──"
+      const prefix = logsPrevious ? "PREV LOGS" : "LOGS"
+      return `${prefix}: ${containerName}`
+    }
     return "DETAILS"
-  }, [yamlEditMode, lastLeftBox, podDetailFull, containerIndex, appResourceIndex, manifestIndex, manifestItems, isLiveManifest, editingLabel])
+  }, [yamlEditMode, lastLeftBox, podDetailFull, containerIndex, appResourceIndex, manifestIndex, manifestItems, isLiveManifest, editingLabel, logsPrevious])
 
   return (
     <>
@@ -475,6 +639,16 @@ export function PodDetailPage({
             focused={leftBoxFocused("manifests")}
             spinner={localSpinner}
           />
+
+          <LogsBox
+            containerName={podDetailFull?.containers[containerIndex]?.name || "──"}
+            focused={leftBoxFocused("logs")}
+            streaming={logsStreaming}
+            sinceLabel={sinceLabel}
+            previous={logsPrevious}
+            wrap={logsWrap}
+            spinner={localSpinner}
+          />
         </box>
 
         <box style={{ flexDirection: "column", flexGrow: 1, gap: 0 }}>
@@ -484,21 +658,31 @@ export function PodDetailPage({
             borderColor={detailsBorderColor}
             style={{ flexDirection: "column", flexGrow: 1 }}
           >
-            <DetailsPanel
-              rows={detailsRows}
-              yaml={detailsYaml}
-              yamlMode={yamlEditMode}
-              editEnabled={canEdit}
-              scrollOffset={detailScrollOffset}
-              detailRowIndex={detailRowIndex}
-              scrollRef={yamlScrollRef}
-              textareaRef={textareaRef}
-              onContentChange={() => {
-                if (textareaRef.current) setEditedYaml(textareaRef.current.plainText ?? "")
-              }}
-              onSubmit={handleApply}
-              spinner={localSpinner}
-            />
+            {isLogsView ? (
+              <LogView
+                lines={logs}
+                scrollRef={logsScrollRef}
+                streaming={logsStreaming}
+                previous={logsPrevious}
+                wrap={logsWrap}
+              />
+            ) : (
+              <DetailsPanel
+                rows={detailsRows}
+                yaml={detailsYaml}
+                yamlMode={yamlEditMode}
+                editEnabled={canEdit}
+                scrollOffset={detailScrollOffset}
+                detailRowIndex={detailRowIndex}
+                scrollRef={yamlScrollRef}
+                textareaRef={textareaRef}
+                onContentChange={() => {
+                  if (textareaRef.current) setEditedYaml(textareaRef.current.plainText ?? "")
+                }}
+                onSubmit={handleApply}
+                spinner={localSpinner}
+              />
+            )}
           </box>
           <box
             title="SELECTED"

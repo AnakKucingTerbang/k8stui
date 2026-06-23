@@ -1,6 +1,6 @@
 {
   "name": "k8stui",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Opinionated terminal UI for managing Kubernetes clusters",
   "module": "src/index.tsx",
   "bin": {
@@ -40,6 +40,7 @@
     "typescript": "^5"
   },
   "dependencies": {
+    "@kubernetes/client-node": "^1.4.0",
     "@opentui/core": "^0.4.1",
     "@opentui/react": "^0.4.1",
     "js-yaml": "^5.0.0",
