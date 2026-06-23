@@ -6,11 +6,46 @@ import { CommandsBar } from "../components/CommandsBar"
 import { NodeTable } from "../components/NodeTable"
 import { NamespaceTable } from "../components/NamespaceTable"
 import { ResourceTable } from "../components/ResourceTable"
-import type { Cluster, NamespaceInfo, ClusterResource, NodeDetail, MetricMode } from "../types"
+import type { Cluster, NamespaceInfo, ClusterResource, NodeDetail, MetricMode, ResourceCategory } from "../types"
 
 const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
 
 type ClusterView = "nodes" | "namespaces" | "resources"
+
+const RESOURCE_CATEGORY_ORDER: ResourceCategory[] = ["workloads", "network", "storage", "configuration"]
+
+function buildResourceRowMap(resources: ClusterResource[]) {
+  const grouped = new Map<ResourceCategory, ClusterResource[]>()
+  for (const r of resources) {
+    const list = grouped.get(r.category) || []
+    list.push(r)
+    grouped.set(r.category, list)
+  }
+  const itemToRow: number[] = []
+  const rowToItem = new Map<number, number>()
+  let row = 0
+  let idx = 0
+  for (const cat of RESOURCE_CATEGORY_ORDER) {
+    const items = grouped.get(cat)
+    if (!items || items.length === 0) continue
+    row++
+    for (let i = 0; i < items.length; i++) {
+      itemToRow[idx] = row
+      rowToItem.set(row, idx)
+      row++
+      idx++
+    }
+  }
+  return { itemToRow, rowToItem }
+}
+
+function getViewportBounds(scrollRef: React.RefObject<any>): { first: number; last: number } | null {
+  const scroll = scrollRef.current
+  if (!scroll) return null
+  const top = Math.floor(scroll.scrollTop ?? 0)
+  const h = scroll.viewport?.measuredHeight ?? scroll.viewport?.height ?? scroll.height ?? scroll.measuredHeight ?? 20
+  return { first: top, last: Math.max(top, top + h - 1) }
+}
 
 interface ClusterDetailPageProps {
   cluster: Cluster
@@ -78,20 +113,41 @@ export function ClusterDetailPage({
         setResourceListIndex(0)
       } else if (key.name === "up") {
         if (view === "nodes") {
-          if (nodeListIndex > 0) {
-            const newIdx = nodeListIndex - 1
+          const vis = getViewportBounds(nodeScrollRef)
+          let idx = nodeListIndex
+          if (vis && (idx < vis.first || idx > vis.last)) {
+            idx = Math.min(vis.last, nodeDetails.length - 1)
+          }
+          if (idx > 0) {
+            const newIdx = idx - 1
             setNodeListIndex(newIdx)
             scrollIntoView(nodeScrollRef, `node-${newIdx}`)
           }
         } else if (view === "namespaces") {
-          if (nsListIndex > 0) {
-            const newIdx = nsListIndex - 1
+          const vis = getViewportBounds(nsScrollRef)
+          let idx = nsListIndex
+          if (vis && (idx < vis.first || idx > vis.last)) {
+            idx = Math.min(vis.last, namespaces.length - 1)
+          }
+          if (idx > 0) {
+            const newIdx = idx - 1
             setNsListIndex(newIdx)
             scrollIntoView(nsScrollRef, `ns-${newIdx}`)
           }
         } else if (view === "resources") {
-          if (resourceListIndex > 0) {
-            const newIdx = resourceListIndex - 1
+          const vis = getViewportBounds(resourceScrollRef)
+          const { itemToRow, rowToItem } = buildResourceRowMap(resources)
+          let idx = resourceListIndex
+          const currentRow = itemToRow[idx] ?? 0
+          if (vis && (currentRow < vis.first || currentRow > vis.last)) {
+            let lastVisible = -1
+            for (const [row, item] of rowToItem) {
+              if (row >= vis.first && row <= vis.last) lastVisible = Math.max(lastVisible, item)
+            }
+            if (lastVisible >= 0) idx = lastVisible
+          }
+          if (idx > 0) {
+            const newIdx = idx - 1
             setResourceListIndex(newIdx)
             if (newIdx === 0) {
               resourceScrollRef.current?.scrollTo?.(0)
@@ -102,20 +158,41 @@ export function ClusterDetailPage({
         }
       } else if (key.name === "down") {
         if (view === "nodes") {
-          if (nodeListIndex < nodeDetails.length - 1) {
-            const newIdx = nodeListIndex + 1
+          const vis = getViewportBounds(nodeScrollRef)
+          let idx = nodeListIndex
+          if (vis && (idx < vis.first || idx > vis.last)) {
+            idx = Math.max(vis.first, 0)
+          }
+          if (idx < nodeDetails.length - 1) {
+            const newIdx = idx + 1
             setNodeListIndex(newIdx)
             scrollIntoView(nodeScrollRef, `node-${newIdx}`)
           }
         } else if (view === "namespaces") {
-          if (nsListIndex < namespaces.length - 1) {
-            const newIdx = nsListIndex + 1
+          const vis = getViewportBounds(nsScrollRef)
+          let idx = nsListIndex
+          if (vis && (idx < vis.first || idx > vis.last)) {
+            idx = Math.max(vis.first, 0)
+          }
+          if (idx < namespaces.length - 1) {
+            const newIdx = idx + 1
             setNsListIndex(newIdx)
             scrollIntoView(nsScrollRef, `ns-${newIdx}`)
           }
         } else if (view === "resources") {
-          if (resourceListIndex < resources.length - 1) {
-            const newIdx = resourceListIndex + 1
+          const vis = getViewportBounds(resourceScrollRef)
+          const { itemToRow, rowToItem } = buildResourceRowMap(resources)
+          let idx = resourceListIndex
+          const currentRow = itemToRow[idx] ?? 0
+          if (vis && (currentRow < vis.first || currentRow > vis.last)) {
+            let firstVisible = Infinity
+            for (const [row, item] of rowToItem) {
+              if (row >= vis.first && row <= vis.last && item < firstVisible) firstVisible = item
+            }
+            if (firstVisible < Infinity) idx = firstVisible
+          }
+          if (idx < resources.length - 1) {
+            const newIdx = idx + 1
             setResourceListIndex(newIdx)
             scrollIntoView(resourceScrollRef, `res-${newIdx}`)
           }
@@ -131,7 +208,7 @@ export function ClusterDetailPage({
         onQuit()
       }
     },
-    [view, nodeListIndex, nodeDetails.length, nsListIndex, namespaces.length, resourceListIndex, resources.length, onOpenNode, onBack, onToggleMetric, onQuit, scrollIntoView],
+    [view, nodeListIndex, nodeDetails.length, nsListIndex, namespaces.length, resourceListIndex, resources, onOpenNode, onBack, onToggleMetric, onQuit, scrollIntoView],
   )
 
   useKeyboard(handleKey)
