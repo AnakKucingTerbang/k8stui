@@ -10,11 +10,12 @@ import { WorkloadPage } from "./pages/WorkloadPage"
 import { NetworkPage } from "./pages/NetworkPage"
 import { StoragePage } from "./pages/StoragePage"
 import { ConfigPage } from "./pages/ConfigPage"
+import { SecretPage } from "./pages/SecretPage"
 import { PodPage } from "./pages/PodPage"
 import type {
   Cluster, KubeContext, MetricMode, NodeDetail, NodeCondition,
   NamespaceInfo, ClusterResource, PodDetail, PodDetailFull,
-  NamespacedResource, DetailRow, ResourceCategory,
+  NamespacedResource, DetailRow, ResourceCategory, SecretDetailData,
 } from "./types"
 import {
   loadContextsAsync,
@@ -30,6 +31,7 @@ import {
   fetchNetworkDetailAsync,
   fetchStorageDetailAsync,
   fetchConfigDetailAsync,
+  fetchSecretDetailAsync,
 } from "./kube"
 
 type NavEntry =
@@ -97,6 +99,9 @@ export function App({ renderer }: AppProps) {
   const [configSummary, setConfigSummary] = useState<DetailRow[]>([])
   const [configPods, setConfigPods] = useState<PodDetail[]>([])
   const [configLoading, setConfigLoading] = useState(false)
+
+  const [secretDetail, setSecretDetail] = useState<SecretDetailData | null>(null)
+  const [secretLoading, setSecretLoading] = useState(false)
 
   const [podDetailFull, setPodDetailFull] = useState<PodDetailFull | null>(null)
   const [metricMode, setMetricMode] = useState<MetricMode>("pct")
@@ -240,9 +245,14 @@ export function App({ renderer }: AppProps) {
         setStorageLoading(true)
         break
       case "config":
-        setConfigSummary([])
-        setConfigPods([])
-        setConfigLoading(true)
+        if (resource.kind === "Secret") {
+          setSecretDetail(null)
+          setSecretLoading(true)
+        } else {
+          setConfigSummary([])
+          setConfigPods([])
+          setConfigLoading(true)
+        }
         break
     }
 
@@ -271,11 +281,18 @@ export function App({ renderer }: AppProps) {
         })
         break
       case "config":
-        fetchConfigDetailAsync(currentContext, entry.namespace, entry.kind, entry.name).then((data) => {
-          setConfigSummary(data.summary)
-          setConfigPods(data.pods)
-          setConfigLoading(false)
-        })
+        if (entry.kind === "Secret") {
+          fetchSecretDetailAsync(currentContext, entry.namespace, entry.name).then((data) => {
+            setSecretDetail(data)
+            setSecretLoading(false)
+          })
+        } else {
+          fetchConfigDetailAsync(currentContext, entry.namespace, entry.kind, entry.name).then((data) => {
+            setConfigSummary(data.summary)
+            setConfigPods(data.pods)
+            setConfigLoading(false)
+          })
+        }
         break
     }
   }, [currentContext, push])
@@ -305,15 +322,24 @@ export function App({ renderer }: AppProps) {
   }, [currentContext, push])
 
   const handleOpenConfig = useCallback((kind: string, name: string, namespace: string) => {
-    setConfigSummary([])
-    setConfigPods([])
-    setConfigLoading(true)
     push({ page: "config", kind, name, namespace })
-    fetchConfigDetailAsync(currentContext, namespace, kind, name).then((data) => {
-      setConfigSummary(data.summary)
-      setConfigPods(data.pods)
-      setConfigLoading(false)
-    })
+    if (kind === "Secret") {
+      setSecretDetail(null)
+      setSecretLoading(true)
+      fetchSecretDetailAsync(currentContext, namespace, name).then((data) => {
+        setSecretDetail(data)
+        setSecretLoading(false)
+      })
+    } else {
+      setConfigSummary([])
+      setConfigPods([])
+      setConfigLoading(true)
+      fetchConfigDetailAsync(currentContext, namespace, kind, name).then((data) => {
+        setConfigSummary(data.summary)
+        setConfigPods(data.pods)
+        setConfigLoading(false)
+      })
+    }
   }, [currentContext, push])
 
   const handleOpenPod = useCallback((pod: PodDetail) => {
@@ -470,7 +496,22 @@ export function App({ renderer }: AppProps) {
         />
       )}
 
-      {current.page === "config" && (
+      {current.page === "config" && (current as { kind: string }).kind === "Secret" && (
+        <SecretPage
+          name={(current as { name: string }).name}
+          namespace={(current as { namespace: string }).namespace}
+          summary={secretDetail?.summary || []}
+          dataKeys={secretDetail?.dataKeys || []}
+          rawData={secretDetail?.rawData || {}}
+          pods={secretDetail?.pods || []}
+          loading={secretLoading}
+          onOpenPod={handleOpenPod}
+          onBack={pop}
+          onQuit={handleQuit}
+        />
+      )}
+
+      {current.page === "config" && (current as { kind: string }).kind !== "Secret" && (
         <ConfigPage
           kind={(current as { kind: string }).kind}
           name={(current as { name: string }).name}

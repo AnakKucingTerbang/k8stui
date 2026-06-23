@@ -160,3 +160,10 @@ export interface ConfigDetailData {
   summary: DetailRow[]
   pods: PodDetail[]
 }
+
+export interface SecretDetailData {
+  summary: DetailRow[]
+  dataKeys: string[]
+  rawData: Record<string, string>
+  pods: PodDetail[]
+}

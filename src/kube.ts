@@ -1,6 +1,6 @@
 import { exec, execSync } from "child_process"
 import { dump } from "js-yaml"
-import type { Cluster, ClusterStatus, KubeContext, NodeDetail, NodeCondition, PodDetail, PodDetailFull, PodContainer, ApplicationResource, DetailRow, NamespaceInfo, ClusterResource, ResourceCategory, NamespacedResource, NamespaceDetailData, WorkloadDetailData, NetworkDetailData, StorageDetailData, ConfigDetailData } from "./types"
+import type { Cluster, ClusterStatus, KubeContext, NodeDetail, NodeCondition, PodDetail, PodDetailFull, PodContainer, ApplicationResource, DetailRow, NamespaceInfo, ClusterResource, ResourceCategory, NamespacedResource, NamespaceDetailData, WorkloadDetailData, NetworkDetailData, StorageDetailData, ConfigDetailData, SecretDetailData } from "./types"
 
 function kubectlAsync(args: string, timeout = 5000): Promise<string> {
   return new Promise((resolve) => {
@@ -470,8 +470,6 @@ function buildSummaryRows(kind: string, obj: any): DetailRow[] {
     }
     case "Secret": {
       rows.push({ key: "Type", value: val(obj.type) })
-      const dataKeys = Object.keys(obj.data || {}).join(", ")
-      rows.push({ key: "Data Keys", value: val(dataKeys) })
       break
     }
     case "ConfigMap": {
@@ -1292,4 +1290,64 @@ export async function fetchConfigDetailAsync(contextName: string, namespace: str
   }
 
   return { summary, pods: refPods }
+}
+
+export async function fetchSecretDetailAsync(contextName: string, namespace: string, name: string): Promise<SecretDetailData> {
+  const [resourceJson, podsJson, topPodsOutput] = await Promise.all([
+    kubectlContextAsync(contextName, `get secret ${name} -n ${namespace} -o json`, 5000),
+    kubectlContextAsync(contextName, `get pods -n ${namespace} -o json`, 5000),
+    kubectlContextAsync(contextName, `top pods -n ${namespace} --no-headers`, 5000),
+  ])
+
+  let summary: DetailRow[] = []
+  let dataKeys: string[] = []
+  let rawData: Record<string, string> = {}
+  let refPods: PodDetail[] = []
+
+  if (resourceJson) {
+    try {
+      const obj = JSON.parse(resourceJson)
+      summary = buildSummaryRows("Secret", obj)
+      dataKeys = Object.keys(obj.data || {})
+      rawData = obj.data || {}
+    } catch {}
+  }
+
+  if (podsJson) {
+    try {
+      const data = JSON.parse(podsJson)
+      const podMetrics = new Map<string, { cpu: string; mem: string }>()
+      if (topPodsOutput) {
+        for (const line of topPodsOutput.split("\n")) {
+          const parts = line.split(/\s+/).filter(Boolean)
+          if (parts.length >= 4) {
+            podMetrics.set(`${parts[0]}/${parts[1]}`, { cpu: parts[2] ?? "", mem: parts[3] ?? "" })
+          }
+        }
+      }
+      for (const pod of data.items || []) {
+        const volumes: any[] = pod.spec?.volumes || []
+        const refs = volumes.filter((v: any) => v.secret?.secretName === name)
+        let envRef = false
+        for (const c of pod.spec?.containers || []) {
+          for (const e of c.env || []) {
+            if (e.valueFrom?.secretKeyRef?.name === name) envRef = true
+          }
+          for (const ef of c.envFrom || []) {
+            if (ef.secretRef?.name === name) envRef = true
+          }
+        }
+        if (refs.length > 0 || envRef) {
+          const pName = pod.metadata?.name || ""
+          const pNs = pod.metadata?.namespace || namespace
+          const status = parsePodStatus(pod)
+          const age = formatAge(pod.metadata?.creationTimestamp || "")
+          const metrics = podMetrics.get(`${pNs}/${pName}`)
+          refPods.push({ name: pName, namespace: pNs, status, cpu: metrics?.cpu || "──", mem: metrics?.mem || "──", age })
+        }
+      }
+    } catch {}
+  }
+
+  return { summary, dataKeys, rawData, pods: refPods }
 }
