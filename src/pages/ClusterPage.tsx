@@ -11,6 +11,19 @@ import type { Cluster, NamespaceInfo, ClusterResource, NodeDetail, MetricMode, R
 const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
 
 type ClusterView = "nodes" | "namespaces" | "resources"
+type Focus = "left" | "right"
+
+const LEFT_VIEWS: ClusterView[] = ["nodes", "namespaces", "resources"]
+const VIEW_LABELS: Record<ClusterView, string> = {
+  nodes: "Nodes",
+  namespaces: "Namespaces",
+  resources: "Resources",
+}
+const VIEW_TITLES: Record<ClusterView, string> = {
+  nodes: "NODES",
+  namespaces: "NAMESPACES",
+  resources: "RESOURCES",
+}
 
 const RESOURCE_CATEGORY_ORDER: ResourceCategory[] = ["workloads", "network", "storage", "configuration"]
 
@@ -76,7 +89,8 @@ export function ClusterPage({
   onToggleMetric,
   onQuit,
 }: ClusterDetailPageProps) {
-  const [view, setView] = useState<ClusterView>("nodes")
+  const [leftIndex, setLeftIndex] = useState(0)
+  const [focus, setFocus] = useState<Focus>("left")
   const [spinnerFrame, setSpinnerFrame] = useState(0)
   const spinnerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const spinner = SPINNER_FRAMES[spinnerFrame % SPINNER_FRAMES.length] ?? "⠋"
@@ -89,6 +103,8 @@ export function ClusterPage({
   const nsScrollRef = useRef<any>(null)
   const resourceScrollRef = useRef<any>(null)
 
+  const activeView = LEFT_VIEWS[leftIndex]!
+
   useEffect(() => {
     if (!loading) {
       if (spinnerRef.current) { clearInterval(spinnerRef.current); spinnerRef.current = null }
@@ -98,6 +114,12 @@ export function ClusterPage({
     return () => { if (spinnerRef.current) { clearInterval(spinnerRef.current); spinnerRef.current = null } }
   }, [loading])
 
+  useEffect(() => {
+    setNodeListIndex(0)
+    setNsListIndex(0)
+    setResourceListIndex(0)
+  }, [leftIndex])
+
   const scrollIntoView = useCallback((scrollRef: React.RefObject<any>, id: string) => {
     scrollRef.current?.scrollChildIntoView?.(id)
   }, [])
@@ -106,17 +128,10 @@ export function ClusterPage({
     (key: { name: string }) => {
       if (key.name === "escape") {
         onBack()
-      } else if (key.name === "1") {
-        setView("nodes")
-        setNodeListIndex(0)
-      } else if (key.name === "2") {
-        setView("namespaces")
-        setNsListIndex(0)
-      } else if (key.name === "3") {
-        setView("resources")
-        setResourceListIndex(0)
       } else if (key.name === "up") {
-        if (view === "nodes") {
+        if (focus === "left") {
+          if (leftIndex > 0) setLeftIndex((i) => i - 1)
+        } else if (activeView === "nodes") {
           const vis = getViewportBounds(nodeScrollRef)
           let idx = nodeListIndex
           if (vis && (idx < vis.first || idx > vis.last)) {
@@ -127,7 +142,7 @@ export function ClusterPage({
             setNodeListIndex(newIdx)
             scrollIntoView(nodeScrollRef, `node-${newIdx}`)
           }
-        } else if (view === "namespaces") {
+        } else if (activeView === "namespaces") {
           const vis = getViewportBounds(nsScrollRef)
           let idx = nsListIndex
           if (vis && (idx < vis.first || idx > vis.last)) {
@@ -138,7 +153,7 @@ export function ClusterPage({
             setNsListIndex(newIdx)
             scrollIntoView(nsScrollRef, `ns-${newIdx}`)
           }
-        } else if (view === "resources") {
+        } else if (activeView === "resources") {
           const vis = getViewportBounds(resourceScrollRef)
           const { itemToRow, rowToItem } = buildResourceRowMap(resources)
           let idx = resourceListIndex
@@ -161,7 +176,9 @@ export function ClusterPage({
           }
         }
       } else if (key.name === "down") {
-        if (view === "nodes") {
+        if (focus === "left") {
+          if (leftIndex < LEFT_VIEWS.length - 1) setLeftIndex((i) => i + 1)
+        } else if (activeView === "nodes") {
           const vis = getViewportBounds(nodeScrollRef)
           let idx = nodeListIndex
           if (vis && (idx < vis.first || idx > vis.last)) {
@@ -172,7 +189,7 @@ export function ClusterPage({
             setNodeListIndex(newIdx)
             scrollIntoView(nodeScrollRef, `node-${newIdx}`)
           }
-        } else if (view === "namespaces") {
+        } else if (activeView === "namespaces") {
           const vis = getViewportBounds(nsScrollRef)
           let idx = nsListIndex
           if (vis && (idx < vis.first || idx > vis.last)) {
@@ -183,7 +200,7 @@ export function ClusterPage({
             setNsListIndex(newIdx)
             scrollIntoView(nsScrollRef, `ns-${newIdx}`)
           }
-        } else if (view === "resources") {
+        } else if (activeView === "resources") {
           const vis = getViewportBounds(resourceScrollRef)
           const { itemToRow, rowToItem } = buildResourceRowMap(resources)
           let idx = resourceListIndex
@@ -201,16 +218,22 @@ export function ClusterPage({
             scrollIntoView(resourceScrollRef, `res-${newIdx}`)
           }
         }
+      } else if (key.name === "right") {
+        if (focus === "left") setFocus("right")
+      } else if (key.name === "left") {
+        if (focus === "right") setFocus("left")
       } else if (key.name === "return") {
-        if (view === "nodes") {
-          const node = nodeDetails[nodeListIndex]
-          if (node) onOpenNode(node)
-        } else if (view === "namespaces") {
-          const ns = namespaces[nsListIndex]
-          if (ns) onOpenNamespace(ns.name)
-        } else if (view === "resources") {
-          const res = resources[resourceListIndex]
-          if (res) onOpenResource(res)
+        if (focus === "right") {
+          if (activeView === "nodes") {
+            const node = nodeDetails[nodeListIndex]
+            if (node) onOpenNode(node)
+          } else if (activeView === "namespaces") {
+            const ns = namespaces[nsListIndex]
+            if (ns) onOpenNamespace(ns.name)
+          } else if (activeView === "resources") {
+            const res = resources[resourceListIndex]
+            if (res) onOpenResource(res)
+          }
         }
       } else if (key.name === "m") {
         onToggleMetric()
@@ -218,20 +241,62 @@ export function ClusterPage({
         onQuit()
       }
     },
-    [view, nodeListIndex, nodeDetails.length, nsListIndex, namespaces.length, resourceListIndex, resources, onOpenNode, onOpenNamespace, onOpenResource, onBack, onToggleMetric, onQuit, scrollIntoView],
+    [focus, leftIndex, activeView, nodeListIndex, nodeDetails.length, nsListIndex, namespaces.length, resourceListIndex, resources, onOpenNode, onOpenNamespace, onOpenResource, onBack, onToggleMetric, onQuit, scrollIntoView],
   )
 
   useKeyboard(handleKey)
 
-  const tabTitle = useMemo(() => {
-    if (view === "nodes") return "NODES"
-    if (view === "namespaces") return "NAMESPACES"
-    return "RESOURCES"
-  }, [view])
+  const leftBorderColor = focus === "left" ? "#58A6FF" : "#30363D"
+  const rightBorderColor = focus === "right" ? "#58A6FF" : "#30363D"
+
+  const rightTitle = useMemo(() => VIEW_TITLES[activeView], [activeView])
 
   const commands = useMemo(() => {
-    return t`${fg("#58A6FF")("[1]")} ${fg("#8B949E")("nodes  ")}${fg("#58A6FF")("[2]")} ${fg("#8B949E")("namespaces  ")}${fg("#58A6FF")("[3]")} ${fg("#8B949E")("resources  ")}${fg("#58A6FF")("[enter]")} ${fg("#8B949E")("open  ")}${fg("#58A6FF")("[m]")} ${fg("#8B949E")("etric  ")}${fg("#58A6FF")("[esc]")} ${fg("#8B949E")("back  ")}${fg("#58A6FF")("[q]")} ${fg("#8B949E")("uit")}`
-  }, [])
+    if (focus === "right") {
+      return t`${fg("#58A6FF")("[←→]")} ${fg("#8B949E")("focus  ")}${fg("#58A6FF")("[↑↓]")} ${fg("#8B949E")("nav  ")}${fg("#58A6FF")("[enter]")} ${fg("#8B949E")("open  ")}${fg("#58A6FF")("[m]")} ${fg("#8B949E")("etric  ")}${fg("#58A6FF")("[esc]")} ${fg("#8B949E")("back  ")}${fg("#58A6FF")("[q]")} ${fg("#8B949E")("uit")}`
+    }
+    return t`${fg("#58A6FF")("[←→]")} ${fg("#8B949E")("focus  ")}${fg("#58A6FF")("[↑↓]")} ${fg("#8B949E")("nav  ")}${fg("#58A6FF")("[→]")} ${fg("#8B949E")("details  ")}${fg("#58A6FF")("[m]")} ${fg("#8B949E")("etric  ")}${fg("#58A6FF")("[esc]")} ${fg("#8B949E")("back  ")}${fg("#58A6FF")("[q]")} ${fg("#8B949E")("uit")}`
+  }, [focus])
+
+  const renderRightContent = () => {
+    if (loading) {
+      return (
+        <box style={{ flexDirection: "column", alignItems: "center", justifyContent: "center", flexGrow: 1 }}>
+          <text content={t`${fg("#D29922")(spinner)} ${fg("#8B949E")("Loading cluster data...")}`} />
+          <text fg="#484F58" content={`Fetching from ${cluster.name}...`} />
+        </box>
+      )
+    }
+
+    if (activeView === "nodes") {
+      return (
+        <NodeTable
+          nodes={nodeDetails}
+          selectedIndex={nodeListIndex}
+          metricMode={metricMode}
+          scrollRef={nodeScrollRef}
+        />
+      )
+    }
+
+    if (activeView === "namespaces") {
+      return (
+        <NamespaceTable
+          namespaces={namespaces}
+          selectedIndex={nsListIndex}
+          scrollRef={nsScrollRef}
+        />
+      )
+    }
+
+    return (
+      <ResourceTable
+        resources={resources}
+        selectedIndex={resourceListIndex}
+        scrollRef={resourceScrollRef}
+      />
+    )
+  }
 
   return (
     <>
@@ -243,37 +308,37 @@ export function ClusterPage({
       >
         <ClusterOverview cluster={cluster} metricMode={metricMode} />
       </box>
-      <box
-        title={tabTitle}
-        borderStyle="single"
-        borderColor="#58A6FF"
-        style={{ flexDirection: "column", flexGrow: 1, width: "100%" }}
-      >
-        {loading ? (
-          <box style={{ flexDirection: "column", alignItems: "center", justifyContent: "center", flexGrow: 1 }}>
-            <text content={t`${fg("#D29922")(spinner)} ${fg("#8B949E")("Loading cluster data...")}`} />
-            <text fg="#484F58" content={`Fetching from ${cluster.name}...`} />
+
+      <box style={{ flexDirection: "row", flexGrow: 1, width: "100%", gap: 0 }}>
+        <box
+          title="VIEWS"
+          borderStyle="single"
+          borderColor={leftBorderColor}
+          style={{ flexDirection: "column", width: 20, gap: 0 }}
+        >
+          <box style={{ flexDirection: "column", paddingLeft: 1, paddingTop: 1, gap: 0 }}>
+            {LEFT_VIEWS.map((view, i) => {
+              const isSelected = i === leftIndex
+              const bgColor = isSelected ? "#1A3A5C" : undefined
+              const textColor = isSelected ? "#E6EDF3" : "#8B949E"
+              const label = VIEW_LABELS[view]
+              return (
+                <box key={view} style={{ height: 1, width: "100%", backgroundColor: bgColor }}>
+                  <text content={t`${fg(textColor)(label)}`} />
+                </box>
+              )
+            })}
           </box>
-        ) : view === "nodes" ? (
-          <NodeTable
-            nodes={nodeDetails}
-            selectedIndex={nodeListIndex}
-            metricMode={metricMode}
-            scrollRef={nodeScrollRef}
-          />
-        ) : view === "namespaces" ? (
-          <NamespaceTable
-            namespaces={namespaces}
-            selectedIndex={nsListIndex}
-            scrollRef={nsScrollRef}
-          />
-        ) : (
-          <ResourceTable
-            resources={resources}
-            selectedIndex={resourceListIndex}
-            scrollRef={resourceScrollRef}
-          />
-        )}
+        </box>
+
+        <box
+          title={rightTitle}
+          borderStyle="single"
+          borderColor={rightBorderColor}
+          style={{ flexDirection: "column", flexGrow: 1, gap: 0 }}
+        >
+          {renderRightContent()}
+        </box>
       </box>
 
       <CommandsBar content={commands} />
