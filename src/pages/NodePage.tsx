@@ -10,6 +10,17 @@ import type { NodeDetail, NodeCondition, PodDetail, MetricMode } from "../types"
 const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
 
 type NodeView = "pods" | "conditions"
+type Focus = "left" | "right"
+
+const LEFT_VIEWS: NodeView[] = ["pods", "conditions"]
+const VIEW_LABELS: Record<NodeView, string> = {
+  pods: "Pods",
+  conditions: "Conditions",
+}
+const VIEW_TITLES: Record<NodeView, string> = {
+  pods: "PODS",
+  conditions: "CONDITIONS",
+}
 
 function getViewportBounds(scrollRef: React.RefObject<any>): { first: number; last: number } | null {
   const scroll = scrollRef.current
@@ -42,7 +53,8 @@ export function NodePage({
   onToggleMetric,
   onQuit,
 }: NodePageProps) {
-  const [view, setView] = useState<NodeView>("pods")
+  const [leftIndex, setLeftIndex] = useState(0)
+  const [focus, setFocus] = useState<Focus>("left")
   const [podListIndex, setPodListIndex] = useState(0)
   const [condListIndex, setCondListIndex] = useState(0)
   const [spinnerFrame, setSpinnerFrame] = useState(0)
@@ -50,6 +62,8 @@ export function NodePage({
   const podScrollRef = useRef<any>(null)
   const condScrollRef = useRef<any>(null)
   const spinner = SPINNER_FRAMES[spinnerFrame % SPINNER_FRAMES.length] ?? "⠋"
+
+  const activeView = LEFT_VIEWS[leftIndex]!
 
   useEffect(() => {
     if (!loading) {
@@ -63,7 +77,7 @@ export function NodePage({
   useEffect(() => {
     setPodListIndex(0)
     setCondListIndex(0)
-  }, [node.name])
+  }, [node.name, leftIndex])
 
   const scrollIntoView = useCallback((scrollRef: React.RefObject<any>, id: string) => {
     scrollRef.current?.scrollChildIntoView?.(id)
@@ -73,14 +87,10 @@ export function NodePage({
     (key: { name: string }) => {
       if (key.name === "escape") {
         onBack()
-      } else if (key.name === "1") {
-        setView("pods")
-        setPodListIndex(0)
-      } else if (key.name === "2") {
-        setView("conditions")
-        setCondListIndex(0)
       } else if (key.name === "up") {
-        if (view === "pods") {
+        if (focus === "left") {
+          if (leftIndex > 0) setLeftIndex((i) => i - 1)
+        } else if (activeView === "pods") {
           const vis = getViewportBounds(podScrollRef)
           let idx = podListIndex
           if (vis && (idx < vis.first || idx > vis.last)) {
@@ -91,7 +101,7 @@ export function NodePage({
             setPodListIndex(newIdx)
             scrollIntoView(podScrollRef, `pod-${newIdx}`)
           }
-        } else if (view === "conditions") {
+        } else if (activeView === "conditions") {
           const vis = getViewportBounds(condScrollRef)
           let idx = condListIndex
           if (vis && (idx < vis.first || idx > vis.last)) {
@@ -104,7 +114,9 @@ export function NodePage({
           }
         }
       } else if (key.name === "down") {
-        if (view === "pods") {
+        if (focus === "left") {
+          if (leftIndex < LEFT_VIEWS.length - 1) setLeftIndex((i) => i + 1)
+        } else if (activeView === "pods") {
           const vis = getViewportBounds(podScrollRef)
           let idx = podListIndex
           if (vis && (idx < vis.first || idx > vis.last)) {
@@ -115,7 +127,7 @@ export function NodePage({
             setPodListIndex(newIdx)
             scrollIntoView(podScrollRef, `pod-${newIdx}`)
           }
-        } else if (view === "conditions") {
+        } else if (activeView === "conditions") {
           const vis = getViewportBounds(condScrollRef)
           let idx = condListIndex
           if (vis && (idx < vis.first || idx > vis.last)) {
@@ -127,8 +139,12 @@ export function NodePage({
             scrollIntoView(condScrollRef, `cond-${newIdx}`)
           }
         }
+      } else if (key.name === "right") {
+        if (focus === "left") setFocus("right")
+      } else if (key.name === "left") {
+        if (focus === "right") setFocus("left")
       } else if (key.name === "return") {
-        if (view === "pods") {
+        if (focus === "right" && activeView === "pods") {
           const pod = pods[podListIndex]
           if (pod) onOpenPod(pod)
         }
@@ -138,19 +154,57 @@ export function NodePage({
         onQuit()
       }
     },
-    [view, podListIndex, condListIndex, pods, conditions, onOpenPod, onBack, onToggleMetric, onQuit, scrollIntoView],
+    [focus, leftIndex, activeView, podListIndex, condListIndex, pods, conditions, onOpenPod, onBack, onToggleMetric, onQuit, scrollIntoView],
   )
 
   useKeyboard(handleKey)
 
-  const tabTitle = useMemo(() => {
-    if (view === "pods") return "PODS"
-    return "CONDITIONS"
-  }, [view])
+  const leftBorderColor = focus === "left" ? "#58A6FF" : "#30363D"
+  const rightBorderColor = focus === "right" ? "#58A6FF" : "#30363D"
+
+  const rightTitle = useMemo(() => VIEW_TITLES[activeView], [activeView])
 
   const commands = useMemo(() => {
-    return t`${fg("#58A6FF")("[1]")} ${fg("#8B949E")("pods  ")}${fg("#58A6FF")("[2]")} ${fg("#8B949E")("conditions  ")}${fg("#58A6FF")("[enter]")} ${fg("#8B949E")("open  ")}${fg("#58A6FF")("[esc]")} ${fg("#8B949E")("back  ")}${fg("#58A6FF")("[m]")} ${fg("#8B949E")("etric  ")}${fg("#58A6FF")("[q]")} ${fg("#8B949E")("uit")}`
-  }, [])
+    if (focus === "right" && activeView === "pods") {
+      return t`${fg("#58A6FF")("[←→]")} ${fg("#8B949E")("focus  ")}${fg("#58A6FF")("[↑↓]")} ${fg("#8B949E")("nav  ")}${fg("#58A6FF")("[enter]")} ${fg("#8B949E")("open  ")}${fg("#58A6FF")("[m]")} ${fg("#8B949E")("etric  ")}${fg("#58A6FF")("[esc]")} ${fg("#8B949E")("back  ")}${fg("#58A6FF")("[q]")} ${fg("#8B949E")("uit")}`
+    }
+    if (focus === "right" && activeView === "conditions") {
+      return t`${fg("#58A6FF")("[←→]")} ${fg("#8B949E")("focus  ")}${fg("#58A6FF")("[↑↓]")} ${fg("#8B949E")("nav  ")}${fg("#58A6FF")("[m]")} ${fg("#8B949E")("etric  ")}${fg("#58A6FF")("[esc]")} ${fg("#8B949E")("back  ")}${fg("#58A6FF")("[q]")} ${fg("#8B949E")("uit")}`
+    }
+    return t`${fg("#58A6FF")("[←→]")} ${fg("#8B949E")("focus  ")}${fg("#58A6FF")("[↑↓]")} ${fg("#8B949E")("nav  ")}${fg("#58A6FF")("[→]")} ${fg("#8B949E")("details  ")}${fg("#58A6FF")("[m]")} ${fg("#8B949E")("etric  ")}${fg("#58A6FF")("[esc]")} ${fg("#8B949E")("back  ")}${fg("#58A6FF")("[q]")} ${fg("#8B949E")("uit")}`
+  }, [focus, activeView])
+
+  const renderRightContent = () => {
+    if (loading) {
+      return (
+        <box style={{ flexDirection: "column", alignItems: "center", justifyContent: "center", flexGrow: 1 }}>
+          <text content={t`${fg("#D29922")(spinner)} ${fg("#8B949E")("Loading...")}`} />
+          <text fg="#484F58" content={`Fetching data for ${node.name}...`} />
+        </box>
+      )
+    }
+
+    if (activeView === "pods") {
+      return (
+        <PodTable
+          pods={pods}
+          selectedIndex={podListIndex}
+          scrollRef={podScrollRef}
+          metricMode={metricMode}
+          cpuAllocatable={node.cpuAllocatable}
+          memAllocatable={node.memAllocatable}
+        />
+      )
+    }
+
+    return (
+      <ConditionsTable
+        conditions={conditions}
+        selectedIndex={condListIndex}
+        scrollRef={condScrollRef}
+      />
+    )
+  }
 
   return (
     <>
@@ -162,33 +216,37 @@ export function NodePage({
       >
         <NodeBars node={node} metricMode={metricMode} />
       </box>
-      <box
-        title={tabTitle}
-        borderStyle="single"
-        borderColor="#58A6FF"
-        style={{ flexDirection: "column", flexGrow: 1, width: "100%" }}
-      >
-        {loading ? (
-          <box style={{ flexDirection: "column", alignItems: "center", justifyContent: "center", flexGrow: 1 }}>
-            <text content={t`${fg("#D29922")(spinner)} ${fg("#8B949E")("Loading...")}`} />
-            <text fg="#484F58" content={`Fetching data for ${node.name}...`} />
+
+      <box style={{ flexDirection: "row", flexGrow: 1, width: "100%", gap: 0 }}>
+        <box
+          title="VIEWS"
+          borderStyle="single"
+          borderColor={leftBorderColor}
+          style={{ flexDirection: "column", width: 20, gap: 0 }}
+        >
+          <box style={{ flexDirection: "column", paddingLeft: 1, paddingTop: 1, gap: 0 }}>
+            {LEFT_VIEWS.map((view, i) => {
+              const isSelected = i === leftIndex
+              const bgColor = isSelected ? "#1A3A5C" : undefined
+              const textColor = isSelected ? "#E6EDF3" : "#8B949E"
+              const label = VIEW_LABELS[view]
+              return (
+                <box key={view} style={{ height: 1, width: "100%", backgroundColor: bgColor }}>
+                  <text content={t`${fg(textColor)(label)}`} />
+                </box>
+              )
+            })}
           </box>
-        ) : view === "pods" ? (
-          <PodTable
-            pods={pods}
-            selectedIndex={podListIndex}
-            scrollRef={podScrollRef}
-            metricMode={metricMode}
-            cpuAllocatable={node.cpuAllocatable}
-            memAllocatable={node.memAllocatable}
-          />
-        ) : (
-          <ConditionsTable
-            conditions={conditions}
-            selectedIndex={condListIndex}
-            scrollRef={condScrollRef}
-          />
-        )}
+        </box>
+
+        <box
+          title={rightTitle}
+          borderStyle="single"
+          borderColor={rightBorderColor}
+          style={{ flexDirection: "column", flexGrow: 1, gap: 0 }}
+        >
+          {renderRightContent()}
+        </box>
       </box>
 
       <CommandsBar content={commands} />
