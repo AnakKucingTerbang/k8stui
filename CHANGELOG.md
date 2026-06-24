@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.4.2](https://github.com/AnakKucingTerbang/k8stui/compare/v0.4.1...v0.4.2) (2026-06-24)
+
+
+### Bug Fixes
+
+* **install:** fix curl|bash pipe breaking interactive prompt and improve reliability ([dd43b4a](https://github.com/AnakKucingTerbang/k8stui/commit/dd43b4a631cb4e3e0c3b7c8a2796766c59e45af0))
+
+
+### Features
+
+* **distribution:** add cross-platform binary builds and GitHub Releases CI ([0beb016](https://github.com/AnakKucingTerbang/k8stui/commit/0beb016f3cd03513cfff23d03640e2992388fc12))
+
 ## [0.4.1](https://github.com/AnakKucingTerbang/k8stui/compare/v0.4.0...v0.4.1) (2026-06-24)
 
 
