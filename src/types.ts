@@ -167,3 +167,9 @@ export interface SecretDetailData {
   rawData: Record<string, string>
   pods: PodDetail[]
 }
+
+export interface ClusterDetailData {
+  nodes: NodeDetail[]
+  namespaces: NamespaceInfo[]
+  resources: ClusterResource[]
+}

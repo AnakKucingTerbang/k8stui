@@ -1,5 +1,5 @@
 import { t, fg, bold } from "@opentui/core"
-import { parseCpuMillicores, parseMemBytes } from "../kube"
+import { parseCpuMillicores, parseMemBytes } from "../utils/kube"
 import type { PodDetail, MetricMode } from "../types"
 
 function pad(s: string, len: number): string {

@@ -4,7 +4,7 @@ import { t, fg } from "@opentui/core"
 import { PodTable } from "../components/PodTable"
 import { CommandsBar } from "../components/CommandsBar"
 import { Toast } from "../components/Toast"
-import { copyToClipboard } from "../clipboard"
+import { copyToClipboard } from "../utils/clipboard"
 import type { PodDetail, DetailRow } from "../types"
 
 const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]

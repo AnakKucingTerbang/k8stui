@@ -10,9 +10,9 @@ import { LogsBox } from "../components/LogsBox"
 import { LogView } from "../components/LogView"
 import { CommandsBar } from "../components/CommandsBar"
 import { Toast } from "../components/Toast"
-import { copyToClipboard } from "../clipboard"
-import { applyYamlAsync } from "../kube"
-import { streamPodLogs, trimLogBuffer, getSinceOption, SINCE_OPTIONS, type LogStreamHandle } from "../kube-logs"
+import { copyToClipboard } from "../utils/clipboard"
+import { applyYamlAsync } from "../utils/kube"
+import { streamPodLogs, trimLogBuffer, getSinceOption, SINCE_OPTIONS, type LogStreamHandle } from "../utils/kube-logs"
 import type { PodDetail, PodDetailFull, PodContainer, DetailRow } from "../types"
 
 const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
@@ -183,7 +183,7 @@ export function PodPage({
     setLogsStreaming(true)
     setLogs([])
 
-    const opts: import("../kube-logs").StreamLogOptions = {
+    const opts: import("../utils/kube-logs").StreamLogOptions = {
       contextName,
       podName: pod.name,
       namespace: pod.namespace,

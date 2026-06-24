@@ -32,7 +32,7 @@ import {
   fetchStorageDetailAsync,
   fetchConfigDetailAsync,
   fetchSecretDetailAsync,
-} from "./kube"
+} from "./utils/kube"
 
 type NavEntry =
   | { page: "clusters" }
