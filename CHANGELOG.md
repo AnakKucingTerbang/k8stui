@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.1](https://github.com/AnakKucingTerbang/k8stui/compare/v0.4.0...v0.4.1) (2026-06-24)
+
+
+### Bug Fixes
+
+* **ui:** make VIEWS sidebar highlight edge-to-edge like application/manifests boxes ([6a8061c](https://github.com/AnakKucingTerbang/k8stui/commit/6a8061ce032fc0351b1da46cf005ea9177ee34a1))
+
 # [0.4.0](https://github.com/AnakKucingTerbang/k8stui/compare/v0.3.0...v0.4.0) (2026-06-23)
 
 
