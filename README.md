@@ -19,20 +19,18 @@ bunx k8stui
 
 This downloads and executes k8stui in one command. Bun handles the rest.
 
-### Option 2: npx
-
-```bash
-npx k8stui
-```
-
-Note: k8stui requires Bun (not Node.js). If Bun is installed, `npx` will use it via the shebang. If Bun is missing, `npx` will fail with an error.
-
-### Option 3: curl | sh installer
+### Option 2: curl | sh installer
 
 Installs a `k8stui` command to `~/.local/bin` so you can run it anytime:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/AnakKucingTerbang/k8stui/main/install.sh | bash
+```
+
+For CI or non-interactive use:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/AnakKucingTerbang/k8stui/main/install.sh | bash -s -- --yes
 ```
 
 Then:
@@ -43,7 +41,7 @@ k8stui
 
 The installer will:
 
-- Check for Bun (offer to install if missing)
+- Check for Bun (offer to install if missing, or auto-accept with `--yes`)
 - Check for kubectl (warn if missing, continue anyway)
 - Create `~/.local/bin/k8stui` wrapper script
 - Add `~/.local/bin` to your PATH if needed
@@ -56,27 +54,30 @@ curl -fsSL https://raw.githubusercontent.com/AnakKucingTerbang/k8stui/main/insta
 
 This removes the `~/.local/bin/k8stui` wrapper. The PATH entry is left alone (other tools may use `~/.local/bin`).
 
-## Usage
+## Features
 
-| Key | Action |
-|---|---|
-| `up/down` | Navigate list |
-| `enter` | Open cluster / node detail |
-| `esc` | Go back |
-| `m` | Toggle metric mode (percentage / raw values) |
-| `s` | Sort clusters |
-| `/` | Search clusters |
-| `f` | Toggle favorite |
-| `c` | Switch Kubernetes context |
-| `q` | Quit |
+- Two-pane layout with VIEWS sidebar and arrow-key focus switching
+- YAML editing with `ctrl+enter` to apply changes
+- Pod log streaming with time range filters (live, 5m, 30m, 3h)
+- Secret value reveal/mask with clipboard copy
+- Clipboard copy on any detail row
+- Auto-refreshing cluster status (5s poll)
 
 ## Navigation
 
 ```
-cluster list  →  cluster detail (overview + nodes)  →  node detail (bars + pods)
+clusters
+ └── cluster detail (overview + nodes/namespaces/resources)
+      ├── nodes → node detail (pods, conditions)
+      ├── namespaces → namespace detail
+      │   ├── workloads → workload detail → pod
+      │   ├── pods → pod detail
+      │   ├── network → network detail → pod
+      │   └── config → config detail / secret detail → pod
+      └── resources → (workload / network / storage / config) → pod
 ```
 
-The header breadcrumb extends as you navigate deeper.
+The header breadcrumb extends as you navigate deeper. Keybindings are shown in the COMMANDS bar at the bottom of every page.
 
 ## License
 
