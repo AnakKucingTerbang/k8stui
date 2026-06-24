@@ -12,10 +12,7 @@ ok()    { echo -e "${GREEN}${BOLD}k8stui:${RESET} $*"; }
 warn()  { echo -e "${YELLOW}${BOLD}k8stui:${RESET} $*"; }
 error() { echo -e "${RED}${BOLD}k8stui:${RESET} $*" >&2; }
 
-INSTALL_DIR="${HOME}/.local/bin"
-WRAPPER="${INSTALL_DIR}/k8stui"
 AUTO_YES=0
-PATH_UPDATED=0
 
 for arg in "$@"; do
   case "${arg}" in
@@ -35,13 +32,6 @@ detect_shell_rc() {
   elif [ -f "${HOME}/.bashrc" ]; then
     shell_rc="${HOME}/.bashrc"
   fi
-}
-
-path_needs_update() {
-  case ":${PATH}:" in
-    *":${INSTALL_DIR}:"*) return 1 ;;
-    *) return 0 ;;
-  esac
 }
 
 ensure_bun() {
@@ -89,73 +79,24 @@ ensure_kubectl() {
   warn "Continuing install — k8stui will show a message when run without kubectl."
 }
 
-create_wrapper() {
-  mkdir -p "${INSTALL_DIR}"
-
-  cat > "${WRAPPER}" <<'SCRIPT'
-#!/usr/bin/env bash
-if ! command -v bun &>/dev/null; then
-  echo "k8stui: Bun is required but not found on PATH." >&2
-  echo "k8stui: Install it from https://bun.sh or run: source ~/.bun/env" >&2
-  exit 1
-fi
-exec bunx k8stui "$@"
-SCRIPT
-
-  chmod +x "${WRAPPER}"
-  ok "Wrapper script created: ${WRAPPER}"
+install_k8stui() {
+  info "Installing k8stui globally via Bun..."
+  bun install -g k8stui
+  ok "k8stui installed successfully."
 }
 
-update_path() {
-  if ! path_needs_update; then
-    return 0
-  fi
-
-  detect_shell_rc
-
-  local line="export PATH=\"\${HOME}/.local/bin:\${PATH}\""
-
-  if [ -n "${shell_rc}" ] && [ -f "${shell_rc}" ]; then
-    if grep -qF '.local/bin' "${shell_rc}" 2>/dev/null; then
-      ok "${INSTALL_DIR} already in ${shell_rc}"
-    else
-      echo "" >> "${shell_rc}"
-      echo "${line}" >> "${shell_rc}"
-      ok "Added ${INSTALL_DIR} to PATH in ${shell_rc}"
-      PATH_UPDATED=1
-    fi
-  else
-    warn "Could not detect shell rc file. Add this line to your shell config:"
-    warn "  ${line}"
-  fi
-
-  export PATH="${INSTALL_DIR}:${PATH}"
-}
-
-uninstall() {
+uninstall_k8stui() {
   info "k8stui uninstaller"
   info "=================="
   echo ""
-
-  if [ -f "${WRAPPER}" ]; then
-    rm -f "${WRAPPER}"
-    ok "Removed ${WRAPPER}"
-  else
-    warn "Wrapper script not found at ${WRAPPER}"
-  fi
-
-  echo ""
+  bun remove -g k8stui
   ok "Uninstall complete!"
-  echo ""
-  info "Note: ${INSTALL_DIR} was left on your PATH (other tools may use it)."
-  info "To remove it manually, edit your shell rc file and delete the line:"
-  info "  export PATH=\"\${HOME}/.local/bin:\${PATH}\""
   echo ""
 }
 
 if echo "$@" | grep -qE '(^|\s)--uninstall(\s|$)'; then
   echo ""
-  uninstall
+  uninstall_k8stui
   exit 0
 fi
 
@@ -169,27 +110,11 @@ echo ""
 ensure_kubectl
 echo ""
 
-info "Creating k8stui command..."
-create_wrapper
-echo ""
-
-info "Ensuring ${INSTALL_DIR} is on PATH..."
-update_path
+install_k8stui
 echo ""
 
 ok "Installation complete!"
 echo ""
-if [ "${PATH_UPDATED}" = "1" ]; then
-  warn "PATH was updated in your shell rc file."
-  warn "Open a new terminal or run: source ${shell_rc}"
-  warn "Then run k8stui:"
-  echo ""
-  info "  ${BOLD}k8stui${RESET}"
-else
-  info "Run k8stui:"
-  info "  ${BOLD}k8stui${RESET}"
-fi
-echo ""
-info "Or run directly without installing:"
-info "  ${BOLD}bunx k8stui${RESET}"
+info "Run k8stui:"
+info "  ${BOLD}k8stui${RESET}"
 echo ""
