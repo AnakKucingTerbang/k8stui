@@ -12,91 +12,62 @@ ok()    { echo -e "${GREEN}${BOLD}k8stui:${RESET} $*"; }
 warn()  { echo -e "${YELLOW}${BOLD}k8stui:${RESET} $*"; }
 error() { echo -e "${RED}${BOLD}k8stui:${RESET} $*" >&2; }
 
-AUTO_YES=0
+INSTALL_DIR="${HOME}/.local/bin"
+REPO="AnakKucingTerbang/k8stui"
 
-for arg in "$@"; do
-  case "${arg}" in
-    --yes|-y) AUTO_YES=1 ;;
-    --uninstall) ;;
-  esac
-done
+detect_platform() {
+  local os arch
+  os="$(uname -s)"
+  arch="$(uname -m)"
 
-has() { command -v "$1" &>/dev/null; }
-
-shell_rc=""
-detect_shell_rc() {
-  if [ -n "${ZDOTDIR:-}" ] && [ -f "${ZDOTDIR}/.zshrc" ]; then
-    shell_rc="${ZDOTDIR}/.zshrc"
-  elif [ -f "${HOME}/.zshrc" ]; then
-    shell_rc="${HOME}/.zshrc"
-  elif [ -f "${HOME}/.bashrc" ]; then
-    shell_rc="${HOME}/.bashrc"
-  fi
-}
-
-ensure_bun() {
-  if has bun; then
-    ok "Bun found: $(bun --version)"
-    return 0
-  fi
-
-  warn "Bun is required but not installed."
-  if [ "${AUTO_YES:-0}" = "1" ]; then
-    info "Auto-accepting Bun installation (--yes flag)."
-    response="Y"
-  else
-    info "Install Bun? [Y/n]"
-    read -r response </dev/tty 2>/dev/null || response="Y"
-  fi
-  case "${response:-Y}" in
-    [yY]|[yY][eE][sS]|"")
-      info "Installing Bun via official installer..."
-      curl -fsSL https://bun.sh/install | bash
-      if [ -f "${HOME}/.bun/env" ]; then
-        source "${HOME}/.bun/env"
-        ok "Bun installed: $(bun --version)"
-      else
-        error "Bun installation failed. Please install manually: https://bun.sh"
-        exit 1
-      fi
+  case "${os}" in
+    Darwin)
+      case "${arch}" in
+        arm64) echo "macos-arm64" ;;
+        x86_64) echo "macos-x64" ;;
+        *) error "Unsupported macOS arch: ${arch}"; exit 1 ;;
+      esac
       ;;
-    *)
-      error "Bun is required. Install it from https://bun.sh and re-run this script."
-      exit 1
+    Linux)
+      case "${arch}" in
+        x86_64) echo "linux-x64" ;;
+        aarch64) echo "linux-arm64" ;;
+        *) error "Unsupported Linux arch: ${arch}"; exit 1 ;;
+      esac
       ;;
+    *) error "Unsupported OS: ${os}"; exit 1 ;;
   esac
 }
 
 ensure_kubectl() {
-  if has kubectl; then
+  if command -v kubectl &>/dev/null; then
     ok "kubectl found: $(kubectl version --client 2>/dev/null | head -1)"
     return 0
   fi
-
   warn "kubectl is not installed."
   warn "k8stui requires kubectl to communicate with your cluster."
   warn "Install kubectl: https://kubernetes.io/docs/tasks/tools/"
   warn "Continuing install — k8stui will show a message when run without kubectl."
 }
 
-install_k8stui() {
-  info "Installing k8stui globally via Bun..."
-  bun install -g k8stui
-  ok "k8stui installed successfully."
-}
-
-uninstall_k8stui() {
+uninstall() {
   info "k8stui uninstaller"
   info "=================="
   echo ""
-  bun remove -g k8stui
+  if [ -f "${INSTALL_DIR}/k8stui" ]; then
+    rm -f "${INSTALL_DIR}/k8stui"
+    ok "Removed ${INSTALL_DIR}/k8stui"
+  else
+    warn "k8stui not found at ${INSTALL_DIR}/k8stui"
+  fi
+  echo ""
   ok "Uninstall complete!"
   echo ""
 }
 
-if echo "$@" | grep -qE '(^|\s)--uninstall(\s|$)'; then
+if [ "${1:-}" = "--uninstall" ]; then
   echo ""
-  uninstall_k8stui
+  uninstall
   exit 0
 fi
 
@@ -105,14 +76,46 @@ info "k8stui installer"
 info "================"
 echo ""
 
-ensure_bun
+info "Detecting platform..."
+PLATFORM="$(detect_platform)"
+ok "Detected platform: ${PLATFORM}"
 echo ""
+
+info "Fetching latest release..."
+LATEST="$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" | grep '"tag_name"' | cut -d'"' -f4)"
+ok "Latest version: ${LATEST}"
+echo ""
+
+DOWNLOAD_URL="https://github.com/${REPO}/releases/download/${LATEST}/k8stui-${PLATFORM}"
+info "Downloading k8stui-${PLATFORM}..."
+mkdir -p "${INSTALL_DIR}"
+curl -fsSL "${DOWNLOAD_URL}" -o "${INSTALL_DIR}/k8stui"
+chmod +x "${INSTALL_DIR}/k8stui"
+ok "Downloaded to ${INSTALL_DIR}/k8stui"
+echo ""
+
 ensure_kubectl
 echo ""
 
-install_k8stui
-echo ""
+case ":${PATH}:" in
+  *":${INSTALL_DIR}:"*) ;;
+  *)
+    for rc in "${HOME}/.zshrc" "${HOME}/.bashrc"; do
+      if [ -f "${rc}" ]; then
+        if ! grep -qF '.local/bin' "${rc}" 2>/dev/null; then
+          echo "" >> "${rc}"
+          echo "export PATH=\"\${HOME}/.local/bin:\${PATH}\"" >> "${rc}"
+          ok "Added ${INSTALL_DIR} to PATH in ${rc}"
+          warn "Open a new terminal or run: source ${rc}"
+        fi
+        break
+      fi
+    done
+    export PATH="${INSTALL_DIR}:${PATH}"
+    ;;
+esac
 
+echo ""
 ok "Installation complete!"
 echo ""
 info "Run k8stui:"

@@ -4,33 +4,16 @@ Opinionated terminal UI for managing Kubernetes clusters. Built with OpenTUI + R
 
 ## Prerequisites
 
-- [Bun](https://bun.sh) >= 1.0 — required runtime (OpenTUI uses native FFI)
 - [kubectl](https://kubernetes.io/docs/tasks/tools/) — must be on PATH and configured with a kubeconfig
 
 ## Install
 
-### Option 1: bunx (recommended)
+### Option 1: curl | sh (recommended)
 
-No install step — run directly:
-
-```bash
-bunx k8stui
-```
-
-This downloads and executes k8stui in one command. Bun handles the rest.
-
-### Option 2: curl | sh installer
-
-Installs a `k8stui` command to `~/.local/bin` so you can run it anytime:
+No runtime needed — downloads a self-contained binary:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/AnakKucingTerbang/k8stui/main/install.sh | bash
-```
-
-For CI or non-interactive use:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/AnakKucingTerbang/k8stui/main/install.sh | bash -s -- --yes
 ```
 
 Then:
@@ -41,10 +24,19 @@ k8stui
 
 The installer will:
 
-- Check for Bun (offer to install if missing, or auto-accept with `--yes`)
-- Check for kubectl (warn if missing, continue anyway)
-- Create `~/.local/bin/k8stui` wrapper script
+- Detect your OS and architecture
+- Download the latest binary from GitHub Releases
+- Install to `~/.local/bin/k8stui`
 - Add `~/.local/bin` to your PATH if needed
+- Check for kubectl (warn if missing, continue anyway)
+
+### Option 2: bunx
+
+For users who already have [Bun](https://bun.sh) installed:
+
+```bash
+bunx k8stui
+```
 
 ### Uninstall
 
@@ -52,7 +44,7 @@ The installer will:
 curl -fsSL https://raw.githubusercontent.com/AnakKucingTerbang/k8stui/main/install.sh | bash -s -- --uninstall
 ```
 
-This removes the `~/.local/bin/k8stui` wrapper. The PATH entry is left alone (other tools may use `~/.local/bin`).
+This removes `~/.local/bin/k8stui`. The PATH entry is left alone (other tools may use `~/.local/bin`).
 
 ## Features
 
@@ -78,6 +70,22 @@ clusters
 ```
 
 The header breadcrumb extends as you navigate deeper. Keybindings are shown in the COMMANDS bar at the bottom of every page.
+
+## Releasing
+
+1. Run `bunx release-it` — bumps version, updates CHANGELOG, commits, tags, publishes to npm
+2. Push the tag: `git push origin v<version>`
+3. GitHub Actions builds binaries for all platforms and attaches them to the GitHub Release
+
+Supported platforms:
+
+| Binary | OS | Arch | Libc |
+|---|---|---|---|
+| `k8stui-macos-arm64` | macOS | Apple Silicon | — |
+| `k8stui-macos-x64` | macOS | Intel | — |
+| `k8stui-linux-x64` | Linux | x86_64 | glibc |
+| `k8stui-linux-x64-musl` | Linux | x86_64 | musl |
+| `k8stui-linux-arm64` | Linux | ARM64 | glibc |
 
 ## License
 

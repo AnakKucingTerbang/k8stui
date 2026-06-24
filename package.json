@@ -8,6 +8,7 @@
   },
   "scripts": {
     "start": "bun run src/index.tsx",
+    "build:binaries": "bun run scripts/build.ts",
     "release": "release-it"
   },
   "type": "module",
