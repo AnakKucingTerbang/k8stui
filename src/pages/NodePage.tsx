@@ -224,19 +224,17 @@ export function NodePage({
           borderColor={leftBorderColor}
           style={{ flexDirection: "column", width: 20, gap: 0 }}
         >
-          <box style={{ flexDirection: "column", paddingLeft: 1, paddingTop: 1, gap: 0 }}>
-            {LEFT_VIEWS.map((view, i) => {
-              const isSelected = i === leftIndex
-              const bgColor = isSelected ? "#1A3A5C" : undefined
-              const textColor = isSelected ? "#E6EDF3" : "#8B949E"
-              const label = VIEW_LABELS[view]
-              return (
-                <box key={view} style={{ height: 1, width: "100%", backgroundColor: bgColor }}>
-                  <text content={t`${fg(textColor)(label)}`} />
-                </box>
-              )
-            })}
-          </box>
+          {LEFT_VIEWS.map((view, i) => {
+            const isSelected = i === leftIndex
+            const bgColor = isSelected ? "#1A3A5C" : undefined
+            const textColor = isSelected ? "#E6EDF3" : "#8B949E"
+            const label = VIEW_LABELS[view]
+            return (
+              <box key={view} style={{ height: 1, width: "100%", backgroundColor: bgColor }}>
+                <text content={t`${fg(textColor)(` ${label}`)}`} />
+              </box>
+            )
+          })}
         </box>
 
         <box
