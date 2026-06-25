@@ -1,6 +1,5 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "fs";
+import { mkdirSync, readFileSync, writeFileSync, rmSync } from "fs";
 import { resolve, join } from "path";
-import { tmpdir } from "os";
 
 const REPO = "AnakKucingTerbang/k8stui";
 
@@ -17,10 +16,9 @@ const rootPkgPath = join(rootDir, "package.json");
 const rootPkg = JSON.parse(readFileSync(rootPkgPath, "utf8"));
 const version = rootPkg.version;
 const tag = `v${version}`;
-const dryRun = process.argv.includes("--dry-run");
 const pkgName = rootPkg.name;
 
-console.log(`Publishing ${pkgName}@${version} (tag: ${tag})${dryRun ? " [DRY RUN]" : ""}\n`);
+console.log(`Staging ${pkgName}@${version} (tag: ${tag})\n`);
 
 const releaseUrl = `https://api.github.com/repos/${REPO}/releases/tags/${tag}`;
 const releaseRes = await fetch(releaseUrl, {
@@ -69,11 +67,12 @@ for (const [platform, sha] of Object.entries(checksums)) {
   stamped = stamped.replace(`"{{SHA256_${platform}}}"`, `"${sha}"`);
 }
 
-const stagingDir = mkdtempSync(join(tmpdir(), "k8stui-publish-"));
+const stagingDir = join(rootDir, "dist", "npm-staging");
+rmSync(stagingDir, { recursive: true, force: true });
 mkdirSync(stagingDir, { recursive: true });
+mkdirSync(join(stagingDir, "bin"), { recursive: true });
 
-const stagingPostinstall = join(stagingDir, "postinstall.cjs");
-writeFileSync(stagingPostinstall, stamped);
+writeFileSync(join(stagingDir, "postinstall.cjs"), stamped);
 
 const stagingPkg = { ...rootPkg };
 delete stagingPkg.scripts.postinstall;
@@ -84,32 +83,7 @@ writeFileSync(
   JSON.stringify(stagingPkg, null, 2) + "\n"
 );
 
-const binDir = join(stagingDir, "bin");
-mkdirSync(binDir, { recursive: true });
-writeFileSync(join(binDir, "k8stui"), readFileSync(join(rootDir, "bin", "k8stui")));
+writeFileSync(join(stagingDir, "bin", "k8stui"), readFileSync(join(rootDir, "bin", "k8stui")));
 
-console.log(`Publishing ${pkgName}@${version}...`);
-
-if (dryRun) {
-  const result = Bun.spawnSync(
-    ["npm", "publish", stagingDir, "--dry-run", "--access", "public"],
-    { env: process.env, stdout: "inherit", stderr: "inherit" }
-  );
-  if (result.exitCode !== 0) {
-    console.error(`  Failed (dry-run) ${pkgName}@${version} (exit ${result.exitCode})`);
-  } else {
-    console.log(`  Published ${pkgName}@${version} (dry-run)`);
-  }
-} else {
-  const result = Bun.spawnSync(
-    ["npm", "publish", stagingDir, "--access", "public"],
-    { env: process.env, stdout: "inherit", stderr: "inherit" }
-  );
-  if (result.exitCode !== 0) {
-    console.error(`  Failed to publish ${pkgName}@${version} (exit ${result.exitCode})`);
-    process.exit(1);
-  }
-  console.log(`  Published ${pkgName}@${version}`);
-}
-
-console.log(`\nDone! ${pkgName}@${version} published.`);
+console.log(`Staged ${pkgName}@${version} → ${stagingDir}`);
+console.log(`Run: npm publish ${stagingDir} --access public --provenance`);
