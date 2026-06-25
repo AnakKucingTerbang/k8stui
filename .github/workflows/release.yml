@@ -26,9 +26,53 @@ jobs:
       - name: Make binaries executable
         run: chmod +x dist/bin/*
 
+      - name: Compute SHA256 hashes
+        id: hashes
+        run: |
+          echo "macos_arm64=$(sha256sum dist/bin/k8stui-macos-arm64 | awk '{print $1}')" >> $GITHUB_OUTPUT
+          echo "macos_x64=$(sha256sum dist/bin/k8stui-macos-x64 | awk '{print $1}')" >> $GITHUB_OUTPUT
+          echo "linux_arm64=$(sha256sum dist/bin/k8stui-linux-arm64 | awk '{print $1}')" >> $GITHUB_OUTPUT
+          echo "linux_x64=$(sha256sum dist/bin/k8stui-linux-x64 | awk '{print $1}')" >> $GITHUB_OUTPUT
+
       - name: Upload to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: dist/bin/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update Homebrew formula
+        env:
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          VERSION: ${{ github.ref_name }}
+          MACOS_ARM64: ${{ steps.hashes.outputs.macos_arm64 }}
+          MACOS_X64: ${{ steps.hashes.outputs.macos_x64 }}
+          LINUX_ARM64: ${{ steps.hashes.outputs.linux_arm64 }}
+          LINUX_X64: ${{ steps.hashes.outputs.linux_x64 }}
+        run: |
+          VERSION_NUM="${VERSION#v}"
+          REPO="AnakKucingTerbang/homebrew-k8stui"
+          BASE_URL="https://github.com/AnakKucingTerbang/k8stui/releases/download/${VERSION}"
+
+          git clone https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/${REPO}.git tap-repo
+          cd tap-repo
+
+          sed -i "s|version \".*\"|version \"${VERSION_NUM}\"|" Formula/k8stui.rb
+
+          sed -i "/k8stui-macos-arm64/{n;s|url \".*\"|url \"${BASE_URL}/k8stui-macos-arm64\"|}" Formula/k8stui.rb
+          sed -i "/k8stui-macos-arm64/{n;n;s|sha256 \".*\"|sha256 \"${MACOS_ARM64}\"|}" Formula/k8stui.rb
+
+          sed -i "/k8stui-macos-x64/{n;s|url \".*\"|url \"${BASE_URL}/k8stui-macos-x64\"|}" Formula/k8stui.rb
+          sed -i "/k8stui-macos-x64/{n;n;s|sha256 \".*\"|sha256 \"${MACOS_X64}\"|}" Formula/k8stui.rb
+
+          sed -i "/k8stui-linux-arm64/{n;s|url \".*\"|url \"${BASE_URL}/k8stui-linux-arm64\"|}" Formula/k8stui.rb
+          sed -i "/k8stui-linux-arm64/{n;n;s|sha256 \".*\"|sha256 \"${LINUX_ARM64}\"|}" Formula/k8stui.rb
+
+          sed -i "/k8stui-linux-x64/{n;s|url \".*\"|url \"${BASE_URL}/k8stui-linux-x64\"|}" Formula/k8stui.rb
+          sed -i "/k8stui-linux-x64/{n;n;s|sha256 \".*\"|sha256 \"${LINUX_X64}\"|}" Formula/k8stui.rb
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Formula/k8stui.rb
+          git commit -m "chore: update k8stui to ${VERSION}"
+          git push
