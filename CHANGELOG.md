@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.6.2](https://github.com/AnakKucingTerbang/k8stui/compare/v0.6.1...v0.6.2) (2026-06-25)
+
+
+### Bug Fixes
+
+* **ui:** default to summary tab on secret page entry ([b4b806e](https://github.com/AnakKucingTerbang/k8stui/commit/b4b806e2c0e233e28e0c6edf99594796697eeea9))
+
+
+### Features
+
+* **npm:** add @k8stui/tui optional packages distribution ([846cddd](https://github.com/AnakKucingTerbang/k8stui/commit/846cdddf8d0b8c83b62fb48c07d8c80c09c91acd))
+
 ## [0.6.1](https://github.com/AnakKucingTerbang/k8stui/compare/v0.4.2...v0.6.1) (2026-06-25)
 
 
