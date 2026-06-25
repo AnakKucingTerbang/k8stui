@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.5](https://github.com/AnakKucingTerbang/k8stui/compare/v0.6.4...v0.6.5) (2026-06-25)
+
+
+### Features
+
+* **npm:** consolidate to single @k8stui/tui package with OIDC trusted publishing ([2923266](https://github.com/AnakKucingTerbang/k8stui/commit/29232669222b49fee319b515efdb70ccaf804ef1))
+
 ## [0.6.4](https://github.com/AnakKucingTerbang/k8stui/compare/v0.6.3...v0.6.4) (2026-06-25)
 
 
