@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useKeyboard } from "@opentui/react"
-import { t, fg, type StyledText } from "@opentui/core"
+import { t, fg } from "@opentui/core"
+import { CommandsBar, type CommandItem } from "../../components/CommandsBar"
 import { sshTestConnection, sshCreateEmptyFile, sshReadFile } from "../../utils/ssh"
 import { parseDotenv } from "../../utils/dotenv"
 import { compareEnvWithSecret } from "../../utils/compare"
@@ -241,35 +242,58 @@ export function RegisterModal({
 
   useKeyboard(handleKey)
 
-  const commands = useMemo<StyledText>(() => {
+  const commands = useMemo<CommandItem[]>(() => {
     if (regState === "testing" || regState === "comparing" || regState === "registering" || regState === "syncing" || regState === "creating") {
       const label = regState === "testing" ? "Testing..."
         : regState === "comparing" ? "Comparing..."
         : regState === "syncing" ? "Syncing..."
         : regState === "creating" ? "Creating..."
         : "Registering..."
-      return t`${fg("#D29922")(activeSpinner)} ${fg("#8B949E")(label)}`
+      return [{ key: activeSpinner, label, keyColor: "#D29922" }]
     }
     if (regState === "input") {
-      return t`${fg("#58A6FF")("[↑↓/tab]")} ${fg("#8B949E")("fields  ")}${fg("#58A6FF")("[enter]")} ${fg("#8B949E")("test  ")}${fg("#58A6FF")("[esc]")} ${fg("#8B949E")("cancel")}`
+      return [
+        { key: "[↑↓/tab]", label: "fields" },
+        { key: "[enter]", label: "test" },
+        { key: "[esc]", label: "cancel" },
+      ]
     }
     if (regState === "test-result" && testResult?.connected && testResult?.fileExists) {
-      return t`${fg("#3FB950")("connected, .env found  ")}${fg("#58A6FF")("[enter]")} ${fg("#8B949E")("register  ")}${fg("#58A6FF")("[esc]")} ${fg("#8B949E")("back")}`
+      return [
+        { key: "connected, .env found", label: "", keyColor: "#3FB950" },
+        { key: "[enter]", label: "register" },
+        { key: "[esc]", label: "back" },
+      ]
     }
     if (regState === "test-result" && testResult?.connected && !testResult?.fileExists) {
-      return t`${fg("#D29922")("connected, .env not found  ")}${fg("#58A6FF")("[enter]")} ${fg("#8B949E")("create & register  ")}${fg("#58A6FF")("[esc]")} ${fg("#8B949E")("back")}`
+      return [
+        { key: "connected, .env not found", label: "", keyColor: "#D29922" },
+        { key: "[enter]", label: "create & register" },
+        { key: "[esc]", label: "back" },
+      ]
     }
     if (regState === "test-result") {
-      return t`${fg("#F85149")("connection failed  ")}${fg("#58A6FF")("[esc]")} ${fg("#8B949E")("back")}`
+      return [
+        { key: "connection failed", label: "", keyColor: "#F85149" },
+        { key: "[esc]", label: "back" },
+      ]
     }
     if (regState === "diff" && comparison) {
       const hasDiffs = comparison.different.length > 0
-      return t`${fg("#58A6FF")("[enter]")} ${fg("#8B949E")(hasDiffs ? "sync & register  " : "register  ")}${fg("#58A6FF")("[r]")} ${fg("#8B949E")("register only  ")}${fg("#58A6FF")("[esc]")} ${fg("#8B949E")("back")}`
+      return [
+        { key: "[enter]", label: hasDiffs ? "sync & register" : "register" },
+        { key: "[r]", label: "register only" },
+        { key: "[esc]", label: "back" },
+      ]
     }
     if (regState === "file-not-found") {
-      return t`${fg("#58A6FF")("[c]")} ${fg("#8B949E")("create & register  ")}${fg("#58A6FF")("[e]")} ${fg("#8B949E")("edit path  ")}${fg("#58A6FF")("[esc]")} ${fg("#8B949E")("cancel")}`
+      return [
+        { key: "[c]", label: "create & register" },
+        { key: "[e]", label: "edit path" },
+        { key: "[esc]", label: "cancel" },
+      ]
     }
-    return t`${fg("#8B949E")("")}`
+    return []
   }, [regState, testResult, comparison, activeSpinner])
 
   const renderContent = () => {
@@ -404,13 +428,7 @@ export function RegisterModal({
         {renderContent()}
       </box>
 
-      <box
-        borderStyle="single"
-        borderColor="#30363D"
-        style={{ flexDirection: "row", height: 3, paddingLeft: 1, alignItems: "center" }}
-      >
-        <text fg="#8B949E" content={commands} />
-      </box>
+      <CommandsBar commands={commands} />
     </box>
   )
 }

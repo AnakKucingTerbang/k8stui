@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, forwardRef, useImperativeHandle } from "react"
-import { t, fg, type StyledText } from "@opentui/core"
+import { t, fg } from "@opentui/core"
+import { type CommandItem } from "../../components/CommandsBar"
 import { getSecretManagement, unregisterSecret } from "../../utils/secret-registry"
 import { sshTestConnection, sshReadFile } from "../../utils/ssh"
 import { parseDotenv } from "../../utils/dotenv"
@@ -21,7 +22,7 @@ interface ManageViewProps {
   onRefresh: () => void
   onBack: () => void
   onFocusLeft: () => void
-  onCommands: (commands: StyledText) => void
+  onCommands: (commands: CommandItem[]) => void
   onToast: (msg: string) => void
   onShowRegisterModal: () => void
   onShowEditorModal: (entries: EnvEntry[], management: SecretManagement) => void
@@ -84,20 +85,32 @@ export const ManageView = forwardRef<ManageViewHandle, ManageViewProps>(function
     }
   }, [management, onToast, onShowEditorModal])
 
-  const commands = useMemo(() => {
+  const commands = useMemo<CommandItem[]>(() => {
     if (modalActive) {
-      return t`${fg("#8B949E")("modal active")}`
+      return [{ key: "", label: "modal active", keyColor: "#8B949E" }]
     }
     if (manageState === "unregistered") {
-      return t`${fg("#58A6FF")("[e]")} ${fg("#8B949E")("edit  ")}${fg("#58A6FF")("[←]")} ${fg("#8B949E")("focus left  ")}${fg("#58A6FF")("[esc]")} ${fg("#8B949E")("back")}`
+      return [
+        { key: "[e]", label: "edit" },
+        { key: "[←]", label: "focus left" },
+        { key: "[esc]", label: "back" },
+      ]
     }
     if (manageState === "registered" && management) {
-      return t`${fg("#58A6FF")("[e]")} ${fg("#8B949E")("edit .env  ")}${fg("#58A6FF")("[u]")} ${fg("#8B949E")("unregister  ")}${fg("#58A6FF")("[←]")} ${fg("#8B949E")("focus left  ")}${fg("#58A6FF")("[esc]")} ${fg("#8B949E")("back")}`
+      return [
+        { key: "[e]", label: "edit .env" },
+        { key: "[u]", label: "unregister" },
+        { key: "[←]", label: "focus left" },
+        { key: "[esc]", label: "back" },
+      ]
     }
     if (manageState === "unregister-confirm") {
-      return t`${fg("#F85149")("[y]")} ${fg("#8B949E")("confirm  ")}${fg("#58A6FF")("[n]")} ${fg("#8B949E")("cancel")}`
+      return [
+        { key: "[y]", label: "confirm", keyColor: "#F85149" },
+        { key: "[n]", label: "cancel" },
+      ]
     }
-    return t`${fg("#8B949E")("")}`
+    return []
   }, [manageState, management, modalActive])
 
   useEffect(() => {

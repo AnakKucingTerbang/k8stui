@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useKeyboard } from "@opentui/react"
 import { t, fg } from "@opentui/core"
-import { CommandsBar } from "../components/CommandsBar"
+import { CommandsBar, type CommandItem } from "../components/CommandsBar"
 import { PodTable } from "../components/PodTable"
 import type { PodDetail, DetailRow, MetricMode } from "../types"
 
@@ -95,9 +95,11 @@ export function WorkloadPage({
 
   useKeyboard(handleKey)
 
-  const commands = useMemo(() => {
-    return t`${fg("#58A6FF")("[enter]")} ${fg("#8B949E")("pod  ")}${fg("#58A6FF")("[esc]")} ${fg("#8B949E")("back  ")}${fg("#58A6FF")("[q]")} ${fg("#8B949E")("uit")}`
-  }, [])
+  const commands = useMemo<CommandItem[]>(() => [
+    { key: "[enter]", label: "pod" },
+    { key: "[esc]", label: "back" },
+    { key: "[q]", label: "uit" },
+  ], [])
 
   return (
     <>
@@ -140,7 +142,7 @@ export function WorkloadPage({
         )}
       </box>
 
-      <CommandsBar content={commands} />
+      <CommandsBar commands={commands} />
     </>
   )
 }

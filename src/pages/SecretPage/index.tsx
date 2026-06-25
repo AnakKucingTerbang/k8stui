@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useKeyboard, useRenderer } from "@opentui/react"
 import { t, fg, type StyledText } from "@opentui/core"
-import { CommandsBar } from "../../components/CommandsBar"
+import { CommandsBar, type CommandItem } from "../../components/CommandsBar"
 import { Toast } from "../../components/Toast"
 import { copyToClipboard } from "../../utils/clipboard"
 import { SummaryView } from "./SummaryView"
@@ -55,7 +55,7 @@ export function SecretPage({
   const [podIndex, setPodIndex] = useState(0)
   const [spinnerFrame, setSpinnerFrame] = useState(0)
   const [toastMessage, setToastMessage] = useState("")
-  const [manageCommands, setManageCommands] = useState<StyledText | null>(null)
+  const [manageCommands, setManageCommands] = useState<CommandItem[] | null>(null)
   const [showRegisterModal, setShowRegisterModal] = useState(false)
   const [showEditorModal, setShowEditorModal] = useState(false)
   const [editorEntries, setEditorEntries] = useState<EnvEntry[]>([])
@@ -243,24 +243,50 @@ export function SecretPage({
     return ""
   }, [activeView, revealed, dataKeys.length])
 
-  const commands = useMemo(() => {
+  const commands = useMemo<CommandItem[]>(() => {
     if (focus === "right" && activeView === "manage" && manageCommands) {
       return manageCommands
     }
     if (focus === "right" && activeView === "keys") {
-      const toggleLabel = revealed ? "mask" : "reveal"
-      return t`${fg("#58A6FF")("[d]")} ${fg("#8B949E")(toggleLabel + "  ")}${fg("#58A6FF")("[↑↓]")} ${fg("#8B949E")("nav  ")}${fg("#58A6FF")("[enter]")} ${fg("#8B949E")("copy  ")}${fg("#58A6FF")("[←]")} ${fg("#8B949E")("focus left  ")}${fg("#58A6FF")("[esc]")} ${fg("#8B949E")("back  ")}${fg("#58A6FF")("[q]")} ${fg("#8B949E")("uit")}`
+      return [
+        { key: "[d]", label: revealed ? "mask" : "reveal" },
+        { key: "[↑↓]", label: "nav" },
+        { key: "[enter]", label: "copy" },
+        { key: "[←]", label: "focus left" },
+        { key: "[esc]", label: "back" },
+        { key: "[q]", label: "uit" },
+      ]
     }
     if (focus === "right" && activeView === "refs" && pods.length > 0) {
-      return t`${fg("#58A6FF")("[enter]")} ${fg("#8B949E")("pod  ")}${fg("#58A6FF")("[←→]")} ${fg("#8B949E")("focus  ")}${fg("#58A6FF")("[↑↓]")} ${fg("#8B949E")("nav  ")}${fg("#58A6FF")("[esc]")} ${fg("#8B949E")("back  ")}${fg("#58A6FF")("[q]")} ${fg("#8B949E")("uit")}`
+      return [
+        { key: "[enter]", label: "pod" },
+        { key: "[←→]", label: "focus" },
+        { key: "[↑↓]", label: "nav" },
+        { key: "[esc]", label: "back" },
+        { key: "[q]", label: "uit" },
+      ]
     }
     if (focus === "right" && activeView === "refs") {
-      return t`${fg("#58A6FF")("[←]")} ${fg("#8B949E")("focus left  ")}${fg("#58A6FF")("[esc]")} ${fg("#8B949E")("back  ")}${fg("#58A6FF")("[q]")} ${fg("#8B949E")("uit")}`
+      return [
+        { key: "[←]", label: "focus left" },
+        { key: "[esc]", label: "back" },
+        { key: "[q]", label: "uit" },
+      ]
     }
     if (focus === "right" && activeView === "summary") {
-      return t`${fg("#58A6FF")("[↑↓]")} ${fg("#8B949E")("scroll  ")}${fg("#58A6FF")("[←]")} ${fg("#8B949E")("focus left  ")}${fg("#58A6FF")("[esc]")} ${fg("#8B949E")("back  ")}${fg("#58A6FF")("[q]")} ${fg("#8B949E")("uit")}`
+      return [
+        { key: "[↑↓]", label: "scroll" },
+        { key: "[←]", label: "focus left" },
+        { key: "[esc]", label: "back" },
+        { key: "[q]", label: "uit" },
+      ]
     }
-    return t`${fg("#58A6FF")("[→]")} ${fg("#8B949E")("details  ")}${fg("#58A6FF")("[↑↓]")} ${fg("#8B949E")("nav  ")}${fg("#58A6FF")("[esc]")} ${fg("#8B949E")("back  ")}${fg("#58A6FF")("[q]")} ${fg("#8B949E")("uit")}`
+    return [
+      { key: "[→]", label: "details" },
+      { key: "[↑↓]", label: "nav" },
+      { key: "[esc]", label: "back" },
+      { key: "[q]", label: "uit" },
+    ]
   }, [focus, activeView, revealed, pods.length, manageCommands])
 
   const renderRightContent = () => {
@@ -380,7 +406,7 @@ export function SecretPage({
         )}
       </box>
 
-      <CommandsBar content={commands} />
+      <CommandsBar commands={commands} />
       <Toast message={toastMessage} />
     </>
   )

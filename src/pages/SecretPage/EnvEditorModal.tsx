@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useKeyboard } from "@opentui/react"
 import { t, fg } from "@opentui/core"
+import { CommandsBar, type CommandItem } from "../../components/CommandsBar"
 import { syncSecretFromEnv } from "../../utils/secret-sync"
 import { isPrintable } from "../../utils/keys"
 import type { EnvEntry, SecretManagement, SyncResult } from "../../types"
@@ -213,24 +214,47 @@ export function EnvEditorModal({
 
   useKeyboard(handleKey)
 
-  const commands = useMemo(() => {
+  const commands = useMemo<CommandItem[]>(() => {
     if (editMode === "saving") {
-      return t`${fg("#D29922")(spinner)} ${fg("#8B949E")("Saving...")}`
+      return [{ key: spinner, label: "Saving...", keyColor: "#D29922" }]
     }
     if (editMode === "confirmDiscard") {
-      return t`${fg("#F85149")("[y]")} ${fg("#8B949E")("discard  ")}${fg("#58A6FF")("[n]")} ${fg("#8B949E")("cancel")}`
+      return [
+        { key: "[y]", label: "discard", keyColor: "#F85149" },
+        { key: "[n]", label: "cancel" },
+      ]
     }
     if (editMode === "editValue") {
-      return t`${fg("#58A6FF")("[enter]")} ${fg("#8B949E")("confirm  ")}${fg("#58A6FF")("[esc]")} ${fg("#8B949E")("cancel  ")}${fg("#58A6FF")("[backspace]")} ${fg("#8B949E")("delete char")}`
+      return [
+        { key: "[enter]", label: "confirm" },
+        { key: "[esc]", label: "cancel" },
+        { key: "[backspace]", label: "delete char" },
+      ]
     }
     if (editMode === "addKey") {
-      return t`${fg("#58A6FF")("[enter]")} ${fg("#8B949E")("next  ")}${fg("#58A6FF")("[esc]")} ${fg("#8B949E")("cancel")} ${fg("#8B949E")("— key name")}`
+      return [
+        { key: "[enter]", label: "next" },
+        { key: "[esc]", label: "cancel" },
+        { key: "", label: "— key name", keyColor: "#8B949E" },
+      ]
     }
     if (editMode === "addValue") {
-      return t`${fg("#58A6FF")("[enter]")} ${fg("#8B949E")("confirm  ")}${fg("#58A6FF")("[esc]")} ${fg("#8B949E")("cancel")} ${fg("#8B949E")("— value")}`
+      return [
+        { key: "[enter]", label: "confirm" },
+        { key: "[esc]", label: "cancel" },
+        { key: "", label: "— value", keyColor: "#8B949E" },
+      ]
     }
     const revealLabel = revealed ? "mask" : "reveal"
-    return t`${fg("#58A6FF")("[↑↓]")} ${fg("#8B949E")("nav  ")}${fg("#58A6FF")("[enter]")} ${fg("#8B949E")("edit  ")}${fg("#58A6FF")("[a]")} ${fg("#8B949E")("add  ")}${fg("#58A6FF")("[d]")} ${fg("#8B949E")("delete  ")}${fg("#58A6FF")("[v]")} ${fg("#8B949E")(revealLabel + "  ")}${fg("#58A6FF")("[s]")} ${fg("#8B949E")("save  ")}${fg("#58A6FF")("[esc]")} ${fg("#8B949E")("close")}`
+    return [
+      { key: "[↑↓]", label: "nav" },
+      { key: "[enter]", label: "edit" },
+      { key: "[a]", label: "add" },
+      { key: "[d]", label: "delete" },
+      { key: "[v]", label: revealLabel },
+      { key: "[s]", label: "save" },
+      { key: "[esc]", label: "close" },
+    ]
   }, [editMode, revealed, spinner])
 
   const header = `${management.host}:${management.path}`
@@ -370,13 +394,7 @@ export function EnvEditorModal({
         {renderConfirmDiscard()}
       </box>
 
-      <box
-        borderStyle="single"
-        borderColor="#30363D"
-        style={{ flexDirection: "row", height: 3, paddingLeft: 1, alignItems: "center" }}
-      >
-        <text fg="#8B949E" content={commands} />
-      </box>
+      <CommandsBar commands={commands} />
     </box>
   )
 }

@@ -8,7 +8,7 @@ import { ManifestsBox, type ManifestItem } from "../components/ManifestsBox"
 import { DetailsPanel, getSelectedRowDisplay } from "../components/DetailsPanel"
 import { LogsBox } from "../components/LogsBox"
 import { LogView } from "../components/LogView"
-import { CommandsBar } from "../components/CommandsBar"
+import { CommandsBar, type CommandItem } from "../components/CommandsBar"
 import { Toast } from "../components/Toast"
 import { copyToClipboard } from "../utils/clipboard"
 import { applyYamlAsync } from "../utils/kube"
@@ -549,32 +549,93 @@ export function PodPage({
     return DASH
   }, [isLogsView, isYamlDetails, yamlEditMode, detailsRows, detailRowIndex, podDetailFull, containerIndex, logsStreaming, logsPrevious, sinceLabel, editingLabel])
 
-  const commands = useMemo(() => {
+  const commands = useMemo<CommandItem[]>(() => {
     if (yamlEditMode === "edit") {
-      return t`${fg("#58A6FF")("[ctrl+enter]")} ${fg("#8B949E")("apply  ")}${fg("#58A6FF")("[esc]")} ${fg("#8B949E")("cancel")}`
+      return [
+        { key: "[ctrl+enter]", label: "apply" },
+        { key: "[esc]", label: "cancel" },
+      ]
     }
     if (focus === "details" && isLogsView) {
       if (!logsWrap) {
-        return t`${fg("#58A6FF")("[↑↓]")} ${fg("#8B949E")("scroll  ")}${fg("#58A6FF")("[w]")} ${fg("#8B949E")("wrap  ")}${fg("#58A6FF")("[p]")} ${fg("#8B949E")("prev  ")}${fg("#58A6FF")("[0]")} ${fg("#8B949E")("live  ")}${fg("#58A6FF")("[1]")} ${fg("#8B949E")("5m  ")}${fg("#58A6FF")("[2]")} ${fg("#8B949E")("30m  ")}${fg("#58A6FF")("[3]")} ${fg("#8B949E")("3h  ")}${fg("#58A6FF")("[ [ ] ]")} ${fg("#8B949E")("horiz  ")}${fg("#58A6FF")("[esc]")} ${fg("#8B949E")("back  ")}${fg("#58A6FF")("[q]")} ${fg("#8B949E")("uit")}`
+        return [
+          { key: "[↑↓]", label: "scroll" },
+          { key: "[w]", label: "wrap" },
+          { key: "[p]", label: "prev" },
+          { key: "[0]", label: "live" },
+          { key: "[1]", label: "5m" },
+          { key: "[2]", label: "30m" },
+          { key: "[3]", label: "3h" },
+          { key: "[ [ ] ]", label: "horiz" },
+          { key: "[esc]", label: "back" },
+          { key: "[q]", label: "uit" },
+        ]
       }
-      return t`${fg("#58A6FF")("[↑↓]")} ${fg("#8B949E")("scroll  ")}${fg("#58A6FF")("[w]")} ${fg("#8B949E")("nowrap  ")}${fg("#58A6FF")("[p]")} ${fg("#8B949E")("prev  ")}${fg("#58A6FF")("[0]")} ${fg("#8B949E")("live  ")}${fg("#58A6FF")("[1]")} ${fg("#8B949E")("5m  ")}${fg("#58A6FF")("[2]")} ${fg("#8B949E")("30m  ")}${fg("#58A6FF")("[3]")} ${fg("#8B949E")("3h  ")}${fg("#58A6FF")("[esc]")} ${fg("#8B949E")("back  ")}${fg("#58A6FF")("[q]")} ${fg("#8B949E")("uit")}`
+      return [
+        { key: "[↑↓]", label: "scroll" },
+        { key: "[w]", label: "nowrap" },
+        { key: "[p]", label: "prev" },
+        { key: "[0]", label: "live" },
+        { key: "[1]", label: "5m" },
+        { key: "[2]", label: "30m" },
+        { key: "[3]", label: "3h" },
+        { key: "[esc]", label: "back" },
+        { key: "[q]", label: "uit" },
+      ]
     }
     if (focus === "details") {
       if (isYamlDetails && yamlEditMode === "view") {
         if (canEdit) {
-          return t`${fg("#58A6FF")("[↑↓←→]")} ${fg("#8B949E")("scroll  ")}${fg("#58A6FF")("[pgup/pgdn]")} ${fg("#8B949E")("page  ")}${fg("#58A6FF")("[home/end]")} ${fg("#8B949E")("top/bottom  ")}${fg("#58A6FF")("[e]")} ${fg("#8B949E")("dit  ")}${fg("#58A6FF")("[←]")} ${fg("#8B949E")("focus left  ")}${fg("#58A6FF")("[esc]")} ${fg("#8B949E")("back  ")}${fg("#58A6FF")("[q]")} ${fg("#8B949E")("uit")}`
+          return [
+            { key: "[↑↓←→]", label: "scroll" },
+            { key: "[pgup/pgdn]", label: "page" },
+            { key: "[home/end]", label: "top/bottom" },
+            { key: "[e]", label: "dit" },
+            { key: "[←]", label: "focus left" },
+            { key: "[esc]", label: "back" },
+            { key: "[q]", label: "uit" },
+          ]
         }
-        return t`${fg("#58A6FF")("[↑↓←→]")} ${fg("#8B949E")("scroll  ")}${fg("#58A6FF")("[pgup/pgdn]")} ${fg("#8B949E")("page  ")}${fg("#58A6FF")("[home/end]")} ${fg("#8B949E")("top/bottom  ")}${fg("#58A6FF")("[←]")} ${fg("#8B949E")("focus left  ")}${fg("#58A6FF")("[esc]")} ${fg("#8B949E")("back  ")}${fg("#58A6FF")("[q]")} ${fg("#8B949E")("uit")}`
+        return [
+          { key: "[↑↓←→]", label: "scroll" },
+          { key: "[pgup/pgdn]", label: "page" },
+          { key: "[home/end]", label: "top/bottom" },
+          { key: "[←]", label: "focus left" },
+          { key: "[esc]", label: "back" },
+          { key: "[q]", label: "uit" },
+        ]
       }
       if (detailsRows && !isYamlDetails) {
-        return t`${fg("#58A6FF")("[↑↓]")} ${fg("#8B949E")("scroll  ")}${fg("#58A6FF")("[enter]")} ${fg("#8B949E")("copy  ")}${fg("#58A6FF")("[pgup/pgdn]")} ${fg("#8B949E")("page  ")}${fg("#58A6FF")("[←]")} ${fg("#8B949E")("focus left  ")}${fg("#58A6FF")("[esc]")} ${fg("#8B949E")("back  ")}${fg("#58A6FF")("[q]")} ${fg("#8B949E")("uit")}`
+        return [
+          { key: "[↑↓]", label: "scroll" },
+          { key: "[enter]", label: "copy" },
+          { key: "[pgup/pgdn]", label: "page" },
+          { key: "[←]", label: "focus left" },
+          { key: "[esc]", label: "back" },
+          { key: "[q]", label: "uit" },
+        ]
       }
-      return t`${fg("#58A6FF")("[←]")} ${fg("#8B949E")("focus left  ")}${fg("#58A6FF")("[esc]")} ${fg("#8B949E")("back  ")}${fg("#58A6FF")("[q]")} ${fg("#8B949E")("uit")}`
+      return [
+        { key: "[←]", label: "focus left" },
+        { key: "[esc]", label: "back" },
+        { key: "[q]", label: "uit" },
+      ]
     }
     if (focus === "logs") {
-      return t`${fg("#58A6FF")("[→]")} ${fg("#8B949E")("logs  ")}${fg("#58A6FF")("[↑↓]")} ${fg("#8B949E")("container  ")}${fg("#58A6FF")("[esc]")} ${fg("#8B949E")("back  ")}${fg("#58A6FF")("[q]")} ${fg("#8B949E")("uit")}`
+      return [
+        { key: "[→]", label: "logs" },
+        { key: "[↑↓]", label: "container" },
+        { key: "[esc]", label: "back" },
+        { key: "[q]", label: "uit" },
+      ]
     }
-    return t`${fg("#58A6FF")("[tab]")} ${fg("#8B949E")("cycle  ")}${fg("#58A6FF")("[→]")} ${fg("#8B949E")("details  ")}${fg("#58A6FF")("[↑↓]")} ${fg("#8B949E")("nav  ")}${fg("#58A6FF")("[esc]")} ${fg("#8B949E")("back  ")}${fg("#58A6FF")("[q]")} ${fg("#8B949E")("uit")}`
+    return [
+      { key: "[tab]", label: "cycle" },
+      { key: "[→]", label: "details" },
+      { key: "[↑↓]", label: "nav" },
+      { key: "[esc]", label: "back" },
+      { key: "[q]", label: "uit" },
+    ]
   }, [yamlEditMode, focus, isYamlDetails, isLogsView, canEdit, detailsRows, logsWrap])
 
   const detailsBorderColor = useMemo(() => {
@@ -696,7 +757,7 @@ export function PodPage({
         <Toast message={toastMessage} />
       </box>
 
-      <CommandsBar content={commands} />
+      <CommandsBar commands={commands} />
     </>
   )
 }

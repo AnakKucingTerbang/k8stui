@@ -2,7 +2,7 @@ import { useCallback, useMemo, useState } from "react"
 import { useKeyboard, useTerminalDimensions } from "@opentui/react"
 import { t, fg } from "@opentui/core"
 import { ClusterTable } from "../components/ClusterTable"
-import { CommandsBar } from "../components/CommandsBar"
+import { CommandsBar, type CommandItem } from "../components/CommandsBar"
 import { LegendsBar } from "../components/LegendsBar"
 import { SearchBar } from "../components/SearchBar"
 import { ContextModal } from "../components/ContextModal"
@@ -218,7 +218,15 @@ export function ClustersPage({
 
   useKeyboard(handleKey)
 
-  const commands = useMemo(() => t`${fg("#58A6FF")("[enter]")} open  ${fg("#58A6FF")("[s]")}ort  ${fg("#58A6FF")("[/]")}find  ${fg("#58A6FF")("[f]")}avorite  ${fg("#58A6FF")("[m]")}etric  ${fg("#58A6FF")("[c]")}ontext  ${fg("#58A6FF")("[q]")}uit`, [])
+  const commands = useMemo<CommandItem[]>(() => [
+    { key: "[enter]", label: "open" },
+    { key: "[s]", label: "ort" },
+    { key: "[/]", label: "find" },
+    { key: "[f]", label: "avorite" },
+    { key: "[m]", label: "etric" },
+    { key: "[c]", label: "ontext" },
+    { key: "[q]", label: "uit" },
+  ], [])
 
   return (
     <>
@@ -265,7 +273,7 @@ export function ClustersPage({
 
       <LegendsBar />
 
-      <CommandsBar content={commands} />
+      <CommandsBar commands={commands} />
 
       {contextModalOpen && (
         <ContextModal

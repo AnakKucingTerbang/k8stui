@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useKeyboard } from "@opentui/react"
 import { t, fg } from "@opentui/core"
 import { ClusterOverview } from "../components/ClusterOverview"
-import { CommandsBar } from "../components/CommandsBar"
+import { CommandsBar, type CommandItem } from "../components/CommandsBar"
 import { NodeTable } from "../components/NodeTable"
 import { NamespaceTable } from "../components/NamespaceTable"
 import { ResourceTable } from "../components/ResourceTable"
@@ -251,11 +251,25 @@ export function ClusterPage({
 
   const rightTitle = useMemo(() => VIEW_TITLES[activeView], [activeView])
 
-  const commands = useMemo(() => {
+  const commands = useMemo<CommandItem[]>(() => {
     if (focus === "right") {
-      return t`${fg("#58A6FF")("[←→]")} ${fg("#8B949E")("focus  ")}${fg("#58A6FF")("[↑↓]")} ${fg("#8B949E")("nav  ")}${fg("#58A6FF")("[enter]")} ${fg("#8B949E")("open  ")}${fg("#58A6FF")("[m]")} ${fg("#8B949E")("etric  ")}${fg("#58A6FF")("[esc]")} ${fg("#8B949E")("back  ")}${fg("#58A6FF")("[q]")} ${fg("#8B949E")("uit")}`
+      return [
+        { key: "[←→]", label: "focus" },
+        { key: "[↑↓]", label: "nav" },
+        { key: "[enter]", label: "open" },
+        { key: "[m]", label: "etric" },
+        { key: "[esc]", label: "back" },
+        { key: "[q]", label: "uit" },
+      ]
     }
-    return t`${fg("#58A6FF")("[←→]")} ${fg("#8B949E")("focus  ")}${fg("#58A6FF")("[↑↓]")} ${fg("#8B949E")("nav  ")}${fg("#58A6FF")("[→]")} ${fg("#8B949E")("details  ")}${fg("#58A6FF")("[m]")} ${fg("#8B949E")("etric  ")}${fg("#58A6FF")("[esc]")} ${fg("#8B949E")("back  ")}${fg("#58A6FF")("[q]")} ${fg("#8B949E")("uit")}`
+    return [
+      { key: "[←→]", label: "focus" },
+      { key: "[↑↓]", label: "nav" },
+      { key: "[→]", label: "details" },
+      { key: "[m]", label: "etric" },
+      { key: "[esc]", label: "back" },
+      { key: "[q]", label: "uit" },
+    ]
   }, [focus])
 
   const renderRightContent = () => {
@@ -339,7 +353,7 @@ export function ClusterPage({
         </box>
       </box>
 
-      <CommandsBar content={commands} />
+      <CommandsBar commands={commands} />
     </>
   )
 }

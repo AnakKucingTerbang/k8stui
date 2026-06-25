@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useKeyboard } from "@opentui/react"
 import { t, fg } from "@opentui/core"
-import { CommandsBar } from "../components/CommandsBar"
+import { CommandsBar, type CommandItem } from "../components/CommandsBar"
 import { PodTable } from "../components/PodTable"
 import { ResourceListTable } from "../components/ResourceListTable"
 import type { PodDetail, NamespacedResource, MetricMode } from "../types"
@@ -181,11 +181,23 @@ export function NamespacePage({
 
   const rightTitle = useMemo(() => VIEW_TITLES[activeView], [activeView])
 
-  const commands = useMemo(() => {
+  const commands = useMemo<CommandItem[]>(() => {
     if (focus === "right") {
-      return t`${fg("#58A6FF")("[←→]")} ${fg("#8B949E")("focus  ")}${fg("#58A6FF")("[↑↓]")} ${fg("#8B949E")("nav  ")}${fg("#58A6FF")("[enter]")} ${fg("#8B949E")("open  ")}${fg("#58A6FF")("[esc]")} ${fg("#8B949E")("back  ")}${fg("#58A6FF")("[q]")} ${fg("#8B949E")("uit")}`
+      return [
+        { key: "[←→]", label: "focus" },
+        { key: "[↑↓]", label: "nav" },
+        { key: "[enter]", label: "open" },
+        { key: "[esc]", label: "back" },
+        { key: "[q]", label: "uit" },
+      ]
     }
-    return t`${fg("#58A6FF")("[←→]")} ${fg("#8B949E")("focus  ")}${fg("#58A6FF")("[↑↓]")} ${fg("#8B949E")("nav  ")}${fg("#58A6FF")("[→]")} ${fg("#8B949E")("details  ")}${fg("#58A6FF")("[esc]")} ${fg("#8B949E")("back  ")}${fg("#58A6FF")("[q]")} ${fg("#8B949E")("uit")}`
+    return [
+      { key: "[←→]", label: "focus" },
+      { key: "[↑↓]", label: "nav" },
+      { key: "[→]", label: "details" },
+      { key: "[esc]", label: "back" },
+      { key: "[q]", label: "uit" },
+    ]
   }, [focus])
 
   const renderRightContent = () => {
@@ -256,7 +268,7 @@ export function NamespacePage({
         </box>
       </box>
 
-      <CommandsBar content={commands} />
+      <CommandsBar commands={commands} />
     </>
   )
 }
