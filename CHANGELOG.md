@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.4](https://github.com/AnakKucingTerbang/k8stui/compare/v0.6.3...v0.6.4) (2026-06-25)
+
+
+### Bug Fixes
+
+* **ci:** explicit npm auth + verbose publish errors ([0c480ae](https://github.com/AnakKucingTerbang/k8stui/commit/0c480ae93f7a691da180141d7fb70159af4ebc2a))
+
 ## [0.6.3](https://github.com/AnakKucingTerbang/k8stui/compare/v0.6.2...v0.6.3) (2026-06-25)
 
 
