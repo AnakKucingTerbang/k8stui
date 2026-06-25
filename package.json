@@ -6,6 +6,7 @@
     "k8stui": "bin/k8stui"
   },
   "scripts": {
+    "postinstall": "node postinstall.js",
     "start": "bun run src/index.tsx",
     "build:binaries": "bun run scripts/build.ts",
     "release": "release-it",
@@ -28,15 +29,9 @@
   },
   "license": "Apache-2.0",
   "files": [
-    "bin/"
+    "bin/",
+    "postinstall.js"
   ],
-  "optionalDependencies": {
-    "@k8stui/tui-linux-x64": "0.6.1",
-    "@k8stui/tui-linux-arm64": "0.6.1",
-    "@k8stui/tui-linux-x64-musl": "0.6.1",
-    "@k8stui/tui-darwin-x64": "0.6.1",
-    "@k8stui/tui-darwin-arm64": "0.6.1"
-  },
   "devDependencies": {
     "@kubernetes/client-node": "^1.4.0",
     "@opentui/core": "^0.4.1",

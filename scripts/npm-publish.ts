@@ -4,21 +4,22 @@ import { tmpdir } from "os";
 
 const REPO = "AnakKucingTerbang/k8stui";
 
-const PLATFORMS = [
-  { name: "tui-linux-x64", binary: "k8stui-linux-x64" },
-  { name: "tui-linux-arm64", binary: "k8stui-linux-arm64" },
-  { name: "tui-linux-x64-musl", binary: "k8stui-linux-x64-musl" },
-  { name: "tui-darwin-x64", binary: "k8stui-macos-x64" },
-  { name: "tui-darwin-arm64", binary: "k8stui-macos-arm64" },
-];
+const BINARY_TO_PLATFORM: Record<string, string> = {
+  "k8stui-linux-x64": "linux_x64",
+  "k8stui-linux-arm64": "linux_arm64",
+  "k8stui-linux-x64-musl": "linux_x64_musl",
+  "k8stui-macos-x64": "macos_x64",
+  "k8stui-macos-arm64": "macos_arm64",
+};
 
-const rootPkgPath = resolve(import.meta.dir, "..", "package.json");
+const rootDir = resolve(import.meta.dir, "..");
+const rootPkgPath = join(rootDir, "package.json");
 const rootPkg = JSON.parse(readFileSync(rootPkgPath, "utf8"));
 const version = rootPkg.version;
 const tag = `v${version}`;
 const dryRun = process.argv.includes("--dry-run");
-
 const pkgName = rootPkg.name;
+
 console.log(`Publishing ${pkgName}@${version} (tag: ${tag})${dryRun ? " [DRY RUN]" : ""}\n`);
 
 const releaseUrl = `https://api.github.com/repos/${REPO}/releases/tags/${tag}`;
@@ -39,92 +40,71 @@ const release = (await releaseRes.json()) as {
 const checksums: Record<string, string> = {};
 for (const asset of release.assets) {
   if (asset.digest && asset.digest.startsWith("sha256:")) {
-    checksums[asset.name] = asset.digest.replace("sha256:", "");
+    const platform = BINARY_TO_PLATFORM[asset.name];
+    if (platform) {
+      checksums[platform] = asset.digest.replace("sha256:", "");
+    }
   }
 }
 
-for (const p of PLATFORMS) {
-  if (!checksums[p.binary]) {
-    console.error(`No SHA256 checksum found for ${p.binary} in release ${tag}`);
-    process.exit(1);
-  }
-  console.log(`  ${p.binary}: ${checksums[p.binary]}`);
+for (const [platform, sha] of Object.entries(checksums)) {
+  console.log(`  ${platform}: ${sha}`);
+}
+
+const missingPlatforms = Object.values(BINARY_TO_PLATFORM).filter(
+  (p) => !checksums[p]
+);
+if (missingPlatforms.length > 0) {
+  console.error(
+    `Missing SHA256 checksums for: ${missingPlatforms.join(", ")}`
+  );
+  console.error(`Make sure all binaries exist in release ${tag}`);
+  process.exit(1);
 }
 console.log("");
 
-const platformPkgsDir = resolve(import.meta.dir, "..", "npm-packages", "@k8stui");
-const stagingDir = mkdtempSync(join(tmpdir(), "k8stui-publish-"));
-
-for (const p of PLATFORMS) {
-  const pkgDir = join(platformPkgsDir, p.name);
-  const pkgJsonPath = join(pkgDir, "package.json");
-  const postinstallPath = join(pkgDir, "postinstall.js");
-
-  if (!existsSync(pkgJsonPath)) {
-    console.error(`Missing package.json at ${pkgJsonPath}`);
-    process.exit(1);
-  }
-
-  const stageDir = join(stagingDir, p.name);
-  mkdirSync(stageDir, { recursive: true });
-
-  const pkg = JSON.parse(readFileSync(pkgJsonPath, "utf8"));
-  pkg.version = version;
-
-  writeFileSync(join(stageDir, "package.json"), JSON.stringify(pkg, null, 2) + "\n");
-
-  const postinstallSrc = readFileSync(postinstallPath, "utf8");
-  const stamped = postinstallSrc
-    .replace(/"{{VERSION}}"/g, `"${version}"`)
-    .replace(/"{{SHA256}}"/g, `"${checksums[p.binary]}"`);
-  writeFileSync(join(stageDir, "postinstall.js"), stamped);
-
-  console.log(`Publishing @k8stui/${p.name}@${version}...`);
-
-  if (dryRun) {
-    const result = Bun.spawnSync(["npm", "publish", stageDir, "--dry-run", "--access", "public"], {
-      env: process.env,
-      stdout: "inherit",
-      stderr: "inherit",
-    });
-    if (result.exitCode !== 0) {
-      console.error(`  Failed (dry-run) @k8stui/${p.name}@${version} (exit ${result.exitCode})`);
-    } else {
-      console.log(`  Published @k8stui/${p.name}@${version} (dry-run)`);
-    }
-  } else {
-    const result = Bun.spawnSync(["npm", "publish", stageDir, "--access", "public"], {
-      env: process.env,
-      stdout: "inherit",
-      stderr: "inherit",
-    });
-    if (result.exitCode !== 0) {
-      console.error(`  Failed to publish @k8stui/${p.name}@${version} (exit ${result.exitCode})`);
-      process.exit(1);
-    }
-    console.log(`  Published @k8stui/${p.name}@${version}`);
-  }
+const postinstallSrc = readFileSync(join(rootDir, "postinstall.js"), "utf8");
+let stamped = postinstallSrc.replace(/"{{VERSION}}"/g, `"${version}"`);
+for (const [platform, sha] of Object.entries(checksums)) {
+  stamped = stamped.replace(`"{{SHA256_${platform}}}"`, `"${sha}"`);
 }
 
-console.log(`\nPublishing ${pkgName}@${version}...`);
+const stagingDir = mkdtempSync(join(tmpdir(), "k8stui-publish-"));
+mkdirSync(stagingDir, { recursive: true });
+
+const stagingPostinstall = join(stagingDir, "postinstall.js");
+writeFileSync(stagingPostinstall, stamped);
+
+const stagingPkg = { ...rootPkg };
+delete stagingPkg.scripts.postinstall;
+stagingPkg.scripts = { ...stagingPkg.scripts, postinstall: "node postinstall.js" };
+stagingPkg.files = ["bin/", "postinstall.js"];
+writeFileSync(
+  join(stagingDir, "package.json"),
+  JSON.stringify(stagingPkg, null, 2) + "\n"
+);
+
+const binDir = join(stagingDir, "bin");
+mkdirSync(binDir, { recursive: true });
+writeFileSync(join(binDir, "k8stui"), readFileSync(join(rootDir, "bin", "k8stui")));
+
+console.log(`Publishing ${pkgName}@${version}...`);
 
 if (dryRun) {
-  const result = Bun.spawnSync(["npm", "publish", ".", "--dry-run", "--access", "public"], {
-    env: process.env,
-    stdout: "inherit",
-    stderr: "inherit",
-  });
+  const result = Bun.spawnSync(
+    ["npm", "publish", stagingDir, "--dry-run", "--access", "public"],
+    { env: process.env, stdout: "inherit", stderr: "inherit" }
+  );
   if (result.exitCode !== 0) {
     console.error(`  Failed (dry-run) ${pkgName}@${version} (exit ${result.exitCode})`);
   } else {
     console.log(`  Published ${pkgName}@${version} (dry-run)`);
   }
 } else {
-  const result = Bun.spawnSync(["npm", "publish", ".", "--access", "public"], {
-    env: process.env,
-    stdout: "inherit",
-    stderr: "inherit",
-  });
+  const result = Bun.spawnSync(
+    ["npm", "publish", stagingDir, "--access", "public"],
+    { env: process.env, stdout: "inherit", stderr: "inherit" }
+  );
   if (result.exitCode !== 0) {
     console.error(`  Failed to publish ${pkgName}@${version} (exit ${result.exitCode})`);
     process.exit(1);
@@ -132,4 +112,4 @@ if (dryRun) {
   console.log(`  Published ${pkgName}@${version}`);
 }
 
-console.log(`\nDone! All packages published for v${version}.`);
+console.log(`\nDone! ${pkgName}@${version} published.`);
