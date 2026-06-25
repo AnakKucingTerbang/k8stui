@@ -1,15 +1,16 @@
 {
-  "name": "k8stui",
+  "name": "@k8stui/tui",
   "version": "0.6.1",
   "description": "Opinionated terminal UI for managing Kubernetes clusters",
-  "module": "src/index.tsx",
   "bin": {
-    "k8stui": "dist/cli.js"
+    "k8stui": "bin/k8stui"
   },
   "scripts": {
     "start": "bun run src/index.tsx",
     "build:binaries": "bun run scripts/build.ts",
-    "release": "release-it"
+    "release": "release-it",
+    "publish:npm": "bun run scripts/npm-publish.ts",
+    "publish:npm:dry-run": "bun run scripts/npm-publish.ts --dry-run"
   },
   "type": "module",
   "keywords": [
@@ -27,9 +28,15 @@
   },
   "license": "Apache-2.0",
   "files": [
-    "src/",
-    "dist/"
+    "bin/"
   ],
+  "optionalDependencies": {
+    "@k8stui/tui-linux-x64": "0.6.1",
+    "@k8stui/tui-linux-arm64": "0.6.1",
+    "@k8stui/tui-linux-x64-musl": "0.6.1",
+    "@k8stui/tui-darwin-x64": "0.6.1",
+    "@k8stui/tui-darwin-arm64": "0.6.1"
+  },
   "devDependencies": {
     "@release-it/conventional-changelog": "^11.0.1",
     "@types/bun": "latest",
@@ -40,13 +47,5 @@
   },
   "peerDependencies": {
     "typescript": "^5"
-  },
-  "dependencies": {
-    "@kubernetes/client-node": "^1.4.0",
-    "@opentui/core": "^0.4.1",
-    "@opentui/react": "^0.4.1",
-    "js-yaml": "^5.0.0",
-    "react": "^19.2.7",
-    "ssh2": "^1.17.0"
   }
 }

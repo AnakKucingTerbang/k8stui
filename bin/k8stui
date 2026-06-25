@@ -1,0 +1,83 @@
+#!/usr/bin/env node
+"use strict";
+
+var child_process = require("child_process");
+var fs = require("fs");
+var path = require("path");
+
+var PLATFORM_MAP = {
+  "darwin-x64": "@k8stui/tui-darwin-x64",
+  "darwin-arm64": "@k8stui/tui-darwin-arm64",
+  "linux-x64-musl": "@k8stui/tui-linux-x64-musl",
+  "linux-x64": "@k8stui/tui-linux-x64",
+  "linux-arm64": "@k8stui/tui-linux-arm64",
+};
+
+function detectLibc() {
+  if (process.platform !== "linux") return "";
+  try {
+    var out = child_process.execFileSync("ldd", ["--version"], {
+      encoding: "utf8",
+      timeout: 3000,
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+    if (out.indexOf("musl") !== -1) return "musl";
+  } catch (e) {
+    if (e && e.stderr && e.stderr.indexOf("musl") !== -1) return "musl";
+    try {
+      var out2 = child_process.execSync("getconf GNU_LIBC_VERSION 2>/dev/null", {
+        encoding: "utf8",
+        timeout: 3000,
+      });
+      if (out2 && out2.indexOf("glibc") !== -1) return "";
+    } catch (_) {}
+  }
+  return "";
+}
+
+function getPlatformKey() {
+  var os = process.platform;
+  var arch = process.arch;
+  var libc = detectLibc();
+  var suffix = libc === "musl" ? "-" + libc : "";
+  return os + "-" + arch + suffix;
+}
+
+function findBinary() {
+  var key = getPlatformKey();
+  var pkg = PLATFORM_MAP[key];
+
+  if (!pkg) {
+    console.error("k8stui: unsupported platform " + key);
+    console.error(
+      "Install the standalone binary from: https://github.com/AnakKucingTerbang/k8stui"
+    );
+    process.exit(1);
+  }
+
+  var pkgDir;
+  try {
+    pkgDir = path.dirname(require.resolve(pkg + "/package.json"));
+  } catch (_) {
+    console.error("k8stui: platform package " + pkg + " not installed");
+    console.error("Try: npm install k8stui");
+    process.exit(1);
+  }
+
+  var binary = path.join(pkgDir, "k8stui");
+  if (!fs.existsSync(binary)) {
+    console.error("k8stui: binary not found at " + binary);
+    console.error("The postinstall script may have failed. Try: npm rebuild " + pkg);
+    process.exit(1);
+  }
+
+  return binary;
+}
+
+var binary = findBinary();
+try {
+  child_process.execFileSync(binary, process.argv.slice(2), { stdio: "inherit" });
+} catch (e) {
+  if (e && e.status != null) process.exit(e.status);
+  throw e;
+}

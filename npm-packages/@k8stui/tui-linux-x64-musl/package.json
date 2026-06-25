@@ -1,0 +1,27 @@
+{
+  "name": "@k8stui/tui-linux-x64-musl",
+  "version": "0.0.0",
+  "description": "k8stui binary for linux-x64 (musl)",
+  "os": [
+    "linux"
+  ],
+  "cpu": [
+    "x64"
+  ],
+  "libc": [
+    "musl"
+  ],
+  "files": [
+    "postinstall.js"
+  ],
+  "scripts": {
+    "postinstall": "node postinstall.js"
+  },
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/AnakKucingTerbang/k8stui.git",
+    "directory": "npm-packages/@k8stui/tui-linux-x64-musl"
+  },
+  "homepage": "https://github.com/AnakKucingTerbang/k8stui"
+}
