@@ -1,4 +1,3 @@
-import { $ } from "bun";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "fs";
 import { resolve, join } from "path";
 import { tmpdir } from "os";
@@ -82,30 +81,55 @@ for (const p of PLATFORMS) {
 
   console.log(`Publishing @k8stui/${p.name}@${version}...`);
 
-  const npmCmd = dryRun
-    ? `npm publish "${stageDir}" --dry-run --access public`
-    : `npm publish "${stageDir}" --access public`;
-
-  try {
-    await $`${{ raw: npmCmd }}`.quiet();
+  if (dryRun) {
+    const result = Bun.spawnSync(["npm", "publish", stageDir, "--dry-run", "--access", "public"], {
+      env: process.env,
+      stdout: "inherit",
+      stderr: "inherit",
+    });
+    if (result.exitCode !== 0) {
+      console.error(`  Failed (dry-run) @k8stui/${p.name}@${version} (exit ${result.exitCode})`);
+    } else {
+      console.log(`  Published @k8stui/${p.name}@${version} (dry-run)`);
+    }
+  } else {
+    const result = Bun.spawnSync(["npm", "publish", stageDir, "--access", "public"], {
+      env: process.env,
+      stdout: "inherit",
+      stderr: "inherit",
+    });
+    if (result.exitCode !== 0) {
+      console.error(`  Failed to publish @k8stui/${p.name}@${version} (exit ${result.exitCode})`);
+      process.exit(1);
+    }
     console.log(`  Published @k8stui/${p.name}@${version}`);
-  } catch (e: any) {
-    console.error(`  Failed to publish @k8stui/${p.name}@${version}: ${e.message}`);
-    if (!dryRun) process.exit(1);
   }
 }
 
 console.log(`\nPublishing ${pkgName}@${version}...`);
-const rootCmd = dryRun
-  ? `npm publish . --dry-run --access public`
-  : `npm publish . --access public`;
 
-try {
-  await $`${{ raw: rootCmd }}`.quiet();
+if (dryRun) {
+  const result = Bun.spawnSync(["npm", "publish", ".", "--dry-run", "--access", "public"], {
+    env: process.env,
+    stdout: "inherit",
+    stderr: "inherit",
+  });
+  if (result.exitCode !== 0) {
+    console.error(`  Failed (dry-run) ${pkgName}@${version} (exit ${result.exitCode})`);
+  } else {
+    console.log(`  Published ${pkgName}@${version} (dry-run)`);
+  }
+} else {
+  const result = Bun.spawnSync(["npm", "publish", ".", "--access", "public"], {
+    env: process.env,
+    stdout: "inherit",
+    stderr: "inherit",
+  });
+  if (result.exitCode !== 0) {
+    console.error(`  Failed to publish ${pkgName}@${version} (exit ${result.exitCode})`);
+    process.exit(1);
+  }
   console.log(`  Published ${pkgName}@${version}`);
-} catch (e: any) {
-  console.error(`  Failed to publish ${pkgName}@${version}: ${e.message}`);
-  if (!dryRun) process.exit(1);
 }
 
 console.log(`\nDone! All packages published for v${version}.`);
