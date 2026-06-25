@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.6](https://github.com/AnakKucingTerbang/k8stui/compare/v0.6.5...v0.6.6) (2026-06-25)
+
+
+### Bug Fixes
+
+* **npm:** rename postinstall.js to postinstall.cjs for CommonJS compat ([02d42de](https://github.com/AnakKucingTerbang/k8stui/commit/02d42de447ce097abb31cf61db0541716429a78d))
+
 ## [0.6.5](https://github.com/AnakKucingTerbang/k8stui/compare/v0.6.4...v0.6.5) (2026-06-25)
 
 
