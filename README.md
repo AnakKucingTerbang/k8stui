@@ -8,8 +8,6 @@ Opinionated terminal UI for managing Kubernetes clusters. Built with OpenTUI + R
 
 ## Install
 
-### Option 1: curl | sh (recommended)
-
 No runtime needed — downloads a self-contained binary:
 
 ```bash
@@ -29,14 +27,6 @@ The installer will:
 - Install to `~/.local/bin/k8stui`
 - Add `~/.local/bin` to your PATH if needed
 - Check for kubectl (warn if missing, continue anyway)
-
-### Option 2: bunx
-
-For users who already have [Bun](https://bun.sh) installed:
-
-```bash
-bunx k8stui
-```
 
 ### Uninstall
 
@@ -73,9 +63,8 @@ The header breadcrumb extends as you navigate deeper. Keybindings are shown in t
 
 ## Releasing
 
-1. Run `bunx release-it` — bumps version, updates CHANGELOG, commits, tags, publishes to npm
-2. Push the tag: `git push origin v<version>`
-3. GitHub Actions builds binaries for all platforms and attaches them to the GitHub Release
+1. Run `bunx release-it` — bumps version, updates CHANGELOG, commits, tags, pushes
+2. GitHub Actions builds binaries for all platforms and attaches them to the GitHub Release
 
 Supported platforms:
 

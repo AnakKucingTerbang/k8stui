@@ -1,17 +1,11 @@
 {
-  "name": "@k8stui/tui",
+  "name": "k8stui",
   "version": "0.6.9",
   "description": "Opinionated terminal UI for managing Kubernetes clusters",
-  "bin": {
-    "k8stui": "bin/k8stui"
-  },
   "scripts": {
-    "postinstall": "node postinstall.cjs",
     "start": "bun run src/index.tsx",
     "build:binaries": "bun run scripts/build.ts",
-    "release": "release-it",
-    "publish:npm": "bun run scripts/npm-publish.ts",
-    "publish:npm:dry-run": "bun run scripts/npm-publish.ts --dry-run"
+    "release": "release-it"
   },
   "type": "module",
   "keywords": [
@@ -28,10 +22,6 @@
     "url": "https://github.com/AnakKucingTerbang/k8stui.git"
   },
   "license": "Apache-2.0",
-  "files": [
-    "bin/",
-    "postinstall.cjs"
-  ],
   "devDependencies": {
     "@kubernetes/client-node": "^1.4.0",
     "@opentui/core": "^0.4.1",
