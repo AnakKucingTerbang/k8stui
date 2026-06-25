@@ -47,7 +47,7 @@ export function SecretPage({
   onQuit,
 }: SecretPageProps) {
   const renderer = useRenderer()
-  const [leftIndex, setLeftIndex] = useState(1)
+  const [leftIndex, setLeftIndex] = useState(0)
   const [focus, setFocus] = useState<Focus>("left")
   const [revealed, setRevealed] = useState(false)
   const [decodedValues, setDecodedValues] = useState<Record<string, string> | null>(null)
@@ -94,7 +94,7 @@ export function SecretPage({
   }, [loading])
 
   useEffect(() => {
-    setLeftIndex(management ? 3 : 1)
+    setLeftIndex(0)
     setFocus("left")
     setRevealed(false)
     setDecodedValues(null)
