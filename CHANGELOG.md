@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.7](https://github.com/AnakKucingTerbang/k8stui/compare/v0.6.6...v0.6.7) (2026-06-25)
+
+
+### Bug Fixes
+
+* **npm:** stage pkg in repo, publish with --provenance for OIDC ([1d7e93f](https://github.com/AnakKucingTerbang/k8stui/commit/1d7e93f20002e765bb15be1e99cfd90e6a829916))
+
 ## [0.6.6](https://github.com/AnakKucingTerbang/k8stui/compare/v0.6.5...v0.6.6) (2026-06-25)
 
 
