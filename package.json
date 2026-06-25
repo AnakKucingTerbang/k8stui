@@ -1,6 +1,6 @@
 {
   "name": "@k8stui/tui",
-  "version": "0.6.2",
+  "version": "0.6.3",
   "description": "Opinionated terminal UI for managing Kubernetes clusters",
   "bin": {
     "k8stui": "bin/k8stui"
