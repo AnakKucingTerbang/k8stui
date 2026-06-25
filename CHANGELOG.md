@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.8](https://github.com/AnakKucingTerbang/k8stui/compare/v0.6.7...v0.6.8) (2026-06-25)
+
+
+### Bug Fixes
+
+* **npm:** use ./ prefix so npm treats staging dir as local path ([6a1c68d](https://github.com/AnakKucingTerbang/k8stui/commit/6a1c68d977d612baea89ccb8e8fc635aa49ddc8c))
+
 ## [0.6.7](https://github.com/AnakKucingTerbang/k8stui/compare/v0.6.6...v0.6.7) (2026-06-25)
 
 
