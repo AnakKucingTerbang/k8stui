@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.1](https://github.com/AnakKucingTerbang/k8stui/compare/v0.4.2...v0.6.1) (2026-06-25)
+
+
+### Bug Fixes
+
+* **sync:** atomic .env write, local kubectl apply, and ssh reliability fixes ([85f70aa](https://github.com/AnakKucingTerbang/k8stui/commit/85f70aac11987587c2e7e392dbed983d3ebd1055))
+
 ## [0.4.2](https://github.com/AnakKucingTerbang/k8stui/compare/v0.4.1...v0.4.2) (2026-06-24)
 
 
