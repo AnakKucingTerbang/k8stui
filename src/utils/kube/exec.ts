@@ -1,4 +1,4 @@
-import { exec, execSync } from "child_process"
+import { exec, execSync, spawn } from "child_process"
 
 export function kubectlAsync(args: string, timeout = 5000): Promise<string> {
   return new Promise((resolve) => {
@@ -31,4 +31,25 @@ export function getCurrentContext(): string {
 export function switchContext(context: string): boolean {
   const result = kubectlSync(`config use-context ${context}`)
   return result.includes(`Switched to context "${context}"`)
+}
+
+export function kubectlApplyYamlAsync(
+  context: string,
+  yaml: string,
+  timeout: number = 10000,
+): Promise<{ success: boolean; output: string }> {
+  return new Promise((resolve) => {
+    const child = spawn("kubectl", ["--context", context, "apply", "-f", "-"], { timeout })
+    let stdout = ""
+    let stderr = ""
+    child.stdout.on("data", (d: Buffer) => { stdout += d.toString() })
+    child.stderr.on("data", (d: Buffer) => { stderr += d.toString() })
+    child.on("close", (code) => {
+      if (code === 0) resolve({ success: true, output: stdout.trim() })
+      else resolve({ success: false, output: stderr.trim() || stdout.trim() })
+    })
+    child.on("error", () => resolve({ success: false, output: "kubectl not found" }))
+    child.stdin.write(yaml)
+    child.stdin.end()
+  })
 }

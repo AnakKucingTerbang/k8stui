@@ -15,7 +15,7 @@ import { PodPage } from "./pages/PodPage"
 import type {
   Cluster, KubeContext, MetricMode, NodeDetail, NodeCondition,
   NamespaceInfo, ClusterResource, PodDetail, PodDetailFull,
-  NamespacedResource, DetailRow, ResourceCategory, SecretDetailData,
+  NamespacedResource, DetailRow, ResourceCategory,   SecretDetailData,
 } from "./types"
 import {
   loadContextsAsync,
@@ -362,6 +362,17 @@ export function App({ renderer }: AppProps) {
     })
   }, [currentContext, stack])
 
+  const handleRefreshSecret = useCallback(() => {
+    const secretEntry = stack.find((e): e is NavEntry & { page: "config"; kind: string } => e.page === "config" && e.kind === "Secret")
+    if (!secretEntry || !currentContext) return
+    setSecretDetail(null)
+    setSecretLoading(true)
+    fetchSecretDetailAsync(currentContext, secretEntry.namespace, secretEntry.name).then((data) => {
+      setSecretDetail(data)
+      setSecretLoading(false)
+    })
+  }, [currentContext, stack])
+
   const handleToggleMetric = useCallback(() => {
     setMetricMode((prev) => prev === "pct" ? "raw" : "pct")
   }, [])
@@ -377,8 +388,8 @@ export function App({ renderer }: AppProps) {
     namespaceName: current.page === "namespace" ? (current as { namespace: string }).namespace : undefined,
     resourceKind: current.page === "workload" ? (current as { kind: string }).kind :
                    current.page === "network" ? (current as { kind: string }).kind :
-                   current.page === "storage" ? "PVC" :
-                   current.page === "config" ? (current as { kind: string }).kind : undefined,
+                    current.page === "storage" ? "PVC" :
+                    current.page === "config" ? (current as { kind: string }).kind : undefined,
     resourceName: current.page === "workload" || current.page === "network" || current.page === "storage" || current.page === "config"
                   ? (current as { name: string }).name : undefined,
     podName: current.page === "pod" ? (current as { pod: PodDetail }).pod?.name : undefined,
@@ -505,7 +516,10 @@ export function App({ renderer }: AppProps) {
           rawData={secretDetail?.rawData || {}}
           pods={secretDetail?.pods || []}
           loading={secretLoading}
+          annotations={secretDetail?.annotations || {}}
+          contextName={currentContext}
           onOpenPod={handleOpenPod}
+          onRefresh={handleRefreshSecret}
           onBack={pop}
           onQuit={handleQuit}
         />

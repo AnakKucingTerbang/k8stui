@@ -166,10 +166,43 @@ export interface SecretDetailData {
   dataKeys: string[]
   rawData: Record<string, string>
   pods: PodDetail[]
+  annotations: Record<string, string>
 }
 
 export interface ClusterDetailData {
   nodes: NodeDetail[]
   namespaces: NamespaceInfo[]
   resources: ClusterResource[]
+}
+
+export interface EnvEntry {
+  key: string
+  value: string
+  comment?: string
+  isComment: boolean
+  isBlank: boolean
+}
+
+export interface SecretManagement {
+  strategy: "dotenv"
+  host: string
+  path: string
+}
+
+export interface SyncResult {
+  success: boolean
+  output: string
+}
+
+export interface SshTestResult {
+  connected: boolean
+  fileExists: boolean
+  error?: string
+}
+
+export interface ComparisonResult {
+  matching: { key: string; value: string }[]
+  different: { key: string; clusterValue: string; envValue: string }[]
+  onlyInCluster: { key: string; clusterValue: string }[]
+  onlyInEnv: { key: string; envValue: string }[]
 }

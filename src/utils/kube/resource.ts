@@ -174,6 +174,7 @@ export async function fetchSecretDetailAsync(contextName: string, namespace: str
   let summary: import("../../types").DetailRow[] = []
   let dataKeys: string[] = []
   let rawData: Record<string, string> = {}
+  let annotations: Record<string, string> = {}
 
   if (resourceJson) {
     try {
@@ -181,10 +182,11 @@ export async function fetchSecretDetailAsync(contextName: string, namespace: str
       summary = buildSummaryRows("Secret", obj)
       dataKeys = Object.keys(obj.data || {})
       rawData = obj.data || {}
+      annotations = obj.metadata?.annotations || {}
     } catch {}
   }
 
   const pods = findRefPods(podsJson, topPodsOutput, "Secret", name, namespace)
 
-  return { summary, dataKeys, rawData, pods }
+  return { summary, dataKeys, rawData, pods, annotations }
 }
