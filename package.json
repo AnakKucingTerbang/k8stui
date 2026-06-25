@@ -6,7 +6,7 @@
     "k8stui": "bin/k8stui"
   },
   "scripts": {
-    "postinstall": "node postinstall.js",
+    "postinstall": "node postinstall.cjs",
     "start": "bun run src/index.tsx",
     "build:binaries": "bun run scripts/build.ts",
     "release": "release-it",
@@ -30,7 +30,7 @@
   "license": "Apache-2.0",
   "files": [
     "bin/",
-    "postinstall.js"
+    "postinstall.cjs"
   ],
   "devDependencies": {
     "@kubernetes/client-node": "^1.4.0",

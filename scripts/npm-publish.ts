@@ -63,7 +63,7 @@ if (missingPlatforms.length > 0) {
 }
 console.log("");
 
-const postinstallSrc = readFileSync(join(rootDir, "postinstall.js"), "utf8");
+const postinstallSrc = readFileSync(join(rootDir, "postinstall.cjs"), "utf8");
 let stamped = postinstallSrc.replace(/"{{VERSION}}"/g, `"${version}"`);
 for (const [platform, sha] of Object.entries(checksums)) {
   stamped = stamped.replace(`"{{SHA256_${platform}}}"`, `"${sha}"`);
@@ -72,13 +72,13 @@ for (const [platform, sha] of Object.entries(checksums)) {
 const stagingDir = mkdtempSync(join(tmpdir(), "k8stui-publish-"));
 mkdirSync(stagingDir, { recursive: true });
 
-const stagingPostinstall = join(stagingDir, "postinstall.js");
+const stagingPostinstall = join(stagingDir, "postinstall.cjs");
 writeFileSync(stagingPostinstall, stamped);
 
 const stagingPkg = { ...rootPkg };
 delete stagingPkg.scripts.postinstall;
-stagingPkg.scripts = { ...stagingPkg.scripts, postinstall: "node postinstall.js" };
-stagingPkg.files = ["bin/", "postinstall.js"];
+stagingPkg.scripts = { ...stagingPkg.scripts, postinstall: "node postinstall.cjs" };
+stagingPkg.files = ["bin/", "postinstall.cjs"];
 writeFileSync(
   join(stagingDir, "package.json"),
   JSON.stringify(stagingPkg, null, 2) + "\n"
