@@ -1,16 +1,70 @@
 import type { SecretManagement } from "../types"
-import { kubectlContextAsync } from "./kube/exec"
+import { kubectlContextAsync, kubectlApplyYamlAsync } from "./kube/exec"
 
 const ANNOT_MANAGED_BY = "k8cli.dev/managed-by"
 const ANNOT_ENV_HOST = "k8cli.dev/env-host"
 const ANNOT_ENV_PATH = "k8cli.dev/env-path"
 
+function buildSecretYaml(
+  name: string,
+  namespace: string,
+  entries: { key: string; value: string }[],
+  annotations?: Record<string, string>,
+): string {
+  const data: Record<string, string> = {}
+  for (const entry of entries) {
+    data[entry.key] = Buffer.from(entry.value).toString("base64")
+  }
+
+  const dataLines = Object.entries(data)
+    .map(([k, v]) => `  ${k}: ${v}`)
+    .join("\n")
+
+  const annotationEntries = annotations
+    ? Object.entries(annotations)
+        .map(([k, v]) => `    ${k}: "${v}"`)
+        .join("\n")
+    : ""
+
+  const annotationsBlock = annotationEntries
+    ? `\n  annotations:\n${annotationEntries}`
+    : ""
+
+  return [
+    "apiVersion: v1",
+    "kind: Secret",
+    "metadata:",
+    `  name: ${name}`,
+    `  namespace: ${namespace}${annotationsBlock}`,
+    "type: Opaque",
+    "data:",
+    dataLines,
+  ].join("\n")
+}
+
+export async function createSecret(
+  context: string,
+  namespace: string,
+  name: string,
+  entries: { key: string; value: string }[],
+  annotations?: Record<string, string>,
+): Promise<{ success: boolean; output: string }> {
+  const yaml = buildSecretYaml(name, namespace, entries, annotations)
+  return kubectlApplyYamlAsync(context, yaml)
+}
+
 export function getSecretManagement(annotations: Record<string, string>): SecretManagement | null {
-  if (annotations[ANNOT_MANAGED_BY] !== "dotenv") return null
-  const host = annotations[ANNOT_ENV_HOST]
-  const path = annotations[ANNOT_ENV_PATH]
-  if (!host || !path) return null
-  return { strategy: "dotenv", host, path }
+  const managedBy = annotations[ANNOT_MANAGED_BY]
+  if (managedBy === "kubectl") {
+    return { strategy: "kubectl", host: "", path: "" }
+  }
+  if (managedBy === "dotenv") {
+    const host = annotations[ANNOT_ENV_HOST]
+    const path = annotations[ANNOT_ENV_PATH]
+    if (!host || !path) return null
+    return { strategy: "dotenv", host, path }
+  }
+  return null
 }
 
 export async function registerSecret(

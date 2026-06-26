@@ -235,3 +235,10 @@ export async function sshExec(hostString: string, command: string): Promise<{ st
 export async function sshCreateEmptyFile(hostString: string, filePath: string): Promise<void> {
   await sshWriteFile(hostString, filePath, "")
 }
+
+export async function sshMkdirP(hostString: string, dirPath: string): Promise<void> {
+  const result = await sshExec(hostString, `mkdir -p "${dirPath}"`)
+  if (result.code !== 0) {
+    throw new Error(`mkdir -p failed: ${result.stderr || result.stdout}`)
+  }
+}

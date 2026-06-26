@@ -364,35 +364,36 @@ export function SecretPage({
           {renderRightContent()}
         </Panel>
 
-        {showRegisterModal && (
-          <RegisterModal
-            name={name}
-            namespace={namespace}
-            rawData={rawData}
-            contextName={contextName}
-            termWidth={termWidth}
-            termHeight={termHeight}
-            spinner={spinner}
-            onClose={() => setShowRegisterModal(false)}
-            onRegistered={() => { setShowRegisterModal(false); onRefresh() }}
-            onToast={toast}
-          />
-        )}
-
-        {showEditorModal && editorManagement && (
-          <EnvEditorModal
-            entries={editorEntries}
-            management={editorManagement}
-            namespace={namespace}
-            secretName={name}
-            contextName={contextName}
-            onClose={() => setShowEditorModal(false)}
-            onRefresh={onRefresh}
-            termWidth={termWidth}
-            termHeight={termHeight}
-          />
-        )}
       </box>
+
+      {showRegisterModal && (
+        <RegisterModal
+          name={name}
+          namespace={namespace}
+          rawData={rawData}
+          contextName={contextName}
+          termWidth={termWidth}
+          termHeight={termHeight}
+          spinner={spinner}
+          onClose={() => setShowRegisterModal(false)}
+          onRegistered={() => { setShowRegisterModal(false); onRefresh() }}
+          onToast={toast}
+        />
+      )}
+
+      {showEditorModal && editorManagement && (
+        <EnvEditorModal
+          entries={editorEntries}
+          management={editorManagement}
+          namespace={namespace}
+          secretName={name}
+          contextName={contextName}
+          onClose={() => setShowEditorModal(false)}
+          onRefresh={onRefresh}
+          termWidth={termWidth}
+          termHeight={termHeight}
+        />
+      )}
 
       <CommandsBar commands={commands} />
       <Toast message={toastMessage} />

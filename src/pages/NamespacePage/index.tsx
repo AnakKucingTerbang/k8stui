@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { useKeyboard } from "@opentui/react"
+import { useKeyboard, useRenderer } from "@opentui/react"
 import { t, fg } from "@opentui/core"
-import { Section } from "../components/Section"
-import { Panel } from "../components/Panel"
-import { CommandsBar, type CommandItem } from "../components/CommandsBar"
-import { PodTable } from "../components/PodTable"
-import { ResourceListTable } from "../components/ResourceListTable"
-import type { PodDetail, NamespacedResource, MetricMode } from "../types"
+import { Section } from "../../components/Section"
+import { Panel } from "../../components/Panel"
+import { CommandsBar, type CommandItem } from "../../components/CommandsBar"
+import { PodTable } from "../../components/PodTable"
+import { ResourceListTable } from "../../components/ResourceListTable"
+import { Toast } from "../../components/Toast"
+import { AddSecretModal } from "./AddSecretModal"
+import type { PodDetail, NamespacedResource, MetricMode } from "../../types"
 
 const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
 
@@ -43,12 +45,14 @@ interface NamespacePageProps {
   config: NamespacedResource[]
   loading: boolean
   metricMode: MetricMode
+  contextName: string
   onOpenWorkload: (kind: string, name: string, namespace: string) => void
   onOpenPod: (pod: PodDetail) => void
   onOpenNetwork: (kind: string, name: string, namespace: string) => void
   onOpenConfig: (kind: string, name: string, namespace: string) => void
   onBack: () => void
   onQuit: () => void
+  onRefresh: () => void
 }
 
 export function NamespacePage({
@@ -59,12 +63,14 @@ export function NamespacePage({
   config,
   loading,
   metricMode,
+  contextName,
   onOpenWorkload,
   onOpenPod,
   onOpenNetwork,
   onOpenConfig,
   onBack,
   onQuit,
+  onRefresh,
 }: NamespacePageProps) {
   const [leftIndex, setLeftIndex] = useState(0)
   const [focus, setFocus] = useState<Focus>("left")
@@ -73,12 +79,31 @@ export function NamespacePage({
   const [netIndex, setNetIndex] = useState(0)
   const [cfgIndex, setCfgIndex] = useState(0)
   const [spinnerFrame, setSpinnerFrame] = useState(0)
+  const [showAddSecretModal, setShowAddSecretModal] = useState(false)
+  const [toastMessage, setToastMessage] = useState("")
   const spinnerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const renderer = useRenderer()
   const wlScrollRef = useRef<any>(null)
   const podScrollRef = useRef<any>(null)
   const netScrollRef = useRef<any>(null)
   const cfgScrollRef = useRef<any>(null)
   const spinner = SPINNER_FRAMES[spinnerFrame % SPINNER_FRAMES.length] ?? "⠋"
+
+  const toast = useCallback((msg: string) => {
+    setToastMessage(msg)
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current)
+    toastTimerRef.current = setTimeout(() => setToastMessage(""), 5000)
+  }, [])
+
+  const handleAddSecretCreated = useCallback(() => {
+    setShowAddSecretModal(false)
+    onRefresh()
+  }, [onRefresh])
+
+  const termWidth = renderer.width ?? 120
+  const termHeight = renderer.height ?? 40
+  const modalActive = showAddSecretModal
 
   const activeView = LEFT_VIEWS[leftIndex]!
 
@@ -111,6 +136,8 @@ export function NamespacePage({
 
   const handleKey = useCallback(
     (key: { name: string }) => {
+      if (modalActive) return
+
       if (key.name === "escape") {
         onBack()
       } else if (key.name === "up") {
@@ -169,11 +196,13 @@ export function NamespacePage({
             if (res) onOpenConfig(res.kind, res.name, res.namespace)
           }
         }
+      } else if (key.name === "a" && focus === "right" && activeView === "config") {
+        setShowAddSecretModal(true)
       } else if (key.name === "q") {
         onQuit()
       }
     },
-    [focus, leftIndex, activeView, wlIndex, podIndex, netIndex, cfgIndex, workloads, pods, network, config, currentList, onOpenWorkload, onOpenPod, onOpenNetwork, onOpenConfig, onBack, onQuit, scrollIntoView],
+    [focus, leftIndex, activeView, wlIndex, podIndex, netIndex, cfgIndex, workloads, pods, network, config, currentList, onOpenWorkload, onOpenPod, onOpenNetwork, onOpenConfig, onBack, onQuit, scrollIntoView, modalActive],
   )
 
   useKeyboard(handleKey)
@@ -182,13 +211,17 @@ export function NamespacePage({
 
   const commands = useMemo<CommandItem[]>(() => {
     if (focus === "right") {
-      return [
+      const baseCommands: CommandItem[] = [
         { key: "[←→]", label: "focus" },
         { key: "[↑↓]", label: "nav" },
         { key: "[enter]", label: "open" },
-        { key: "[esc]", label: "back" },
-        { key: "[q]", label: "uit" },
       ]
+      if (activeView === "config") {
+        baseCommands.push({ key: "[a]", label: "add secret" })
+      }
+      baseCommands.push({ key: "[esc]", label: "back" })
+      baseCommands.push({ key: "[q]", label: "uit" })
+      return baseCommands
     }
     return [
       { key: "[←→]", label: "focus" },
@@ -197,7 +230,7 @@ export function NamespacePage({
       { key: "[esc]", label: "back" },
       { key: "[q]", label: "uit" },
     ]
-  }, [focus])
+  }, [focus, activeView])
 
   const renderRightContent = () => {
     if (loading) {
@@ -232,7 +265,7 @@ export function NamespacePage({
         </box>
       </Section>
 
-      <box style={{ flexDirection: "row", flexGrow: 1, width: "100%", gap: 0 }}>
+      <box style={{ flexDirection: "row", flexGrow: 1, width: "100%", gap: 0, position: "relative" }}>
         <Panel title="VIEWS" focused={focus === "left"} width={20} gap={0}>
           {LEFT_VIEWS.map((view, i) => {
             const isSelected = i === leftIndex
@@ -250,9 +283,24 @@ export function NamespacePage({
         <Panel title={rightTitle} focused={focus === "right"} flexGrow={1} gap={0}>
           {renderRightContent()}
         </Panel>
+
       </box>
 
+      {showAddSecretModal && (
+        <AddSecretModal
+          namespace={namespace}
+          contextName={contextName}
+          termWidth={termWidth}
+          termHeight={termHeight}
+          spinner={spinner}
+          onClose={() => setShowAddSecretModal(false)}
+          onCreated={handleAddSecretCreated}
+          onToast={toast}
+        />
+      )}
+
       <CommandsBar commands={commands} />
+      <Toast message={toastMessage} />
     </>
   )
 }

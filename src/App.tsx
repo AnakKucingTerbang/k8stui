@@ -218,6 +218,19 @@ export function App({ renderer }: AppProps) {
     })
   }, [currentContext, push])
 
+  const handleRefreshNamespace = useCallback(() => {
+    const nsEntry = stack.find((e): e is NavEntry & { page: "namespace" } => e.page === "namespace")
+    if (!nsEntry || !currentContext) return
+    setNsLoading(true)
+    fetchNamespaceDetailAsync(currentContext, nsEntry.namespace).then((data) => {
+      setNsWorkloads(data.workloads)
+      setNsPods(data.pods)
+      setNsNetwork(data.network)
+      setNsConfig(data.config)
+      setNsLoading(false)
+    })
+  }, [currentContext, stack])
+
   const handleOpenResource = useCallback((resource: ClusterResource) => {
     const entry: NavEntry = (() => {
       switch (resource.category) {
@@ -455,12 +468,14 @@ export function App({ renderer }: AppProps) {
           config={nsConfig}
           loading={nsLoading}
           metricMode={metricMode}
+          contextName={currentContext}
           onOpenWorkload={handleOpenWorkload}
           onOpenPod={handleOpenPod}
           onOpenNetwork={handleOpenNetwork}
           onOpenConfig={handleOpenConfig}
           onBack={pop}
           onQuit={handleQuit}
+          onRefresh={handleRefreshNamespace}
         />
       )}
 

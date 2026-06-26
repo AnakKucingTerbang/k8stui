@@ -55,7 +55,7 @@ export const ManageView = forwardRef<ManageViewHandle, ManageViewProps>(function
   }, [name, namespace, management])
 
   useEffect(() => {
-    if (manageState === "registered" && management) {
+    if (manageState === "registered" && management && management.strategy === "dotenv") {
       setConnectionStatus("checking")
       sshTestConnection(management.host, management.path).then((result) => {
         setConnectionStatus(result.connected ? "connected" : "failed")
@@ -97,12 +97,14 @@ export const ManageView = forwardRef<ManageViewHandle, ManageViewProps>(function
       ]
     }
     if (manageState === "registered" && management) {
-      return [
-        { key: "[e]", label: "edit .env" },
-        { key: "[u]", label: "unregister" },
-        { key: "[←]", label: "focus left" },
-        { key: "[esc]", label: "back" },
-      ]
+      const cmds: CommandItem[] = []
+      if (management.strategy === "dotenv") {
+        cmds.push({ key: "[e]", label: "edit .env" })
+      }
+      cmds.push({ key: "[u]", label: "unregister" })
+      cmds.push({ key: "[←]", label: "focus left" })
+      cmds.push({ key: "[esc]", label: "back" })
+      return cmds
     }
     if (manageState === "unregister-confirm") {
       return [
@@ -132,7 +134,7 @@ export const ManageView = forwardRef<ManageViewHandle, ManageViewProps>(function
     }
 
     if (manageState === "registered" && management) {
-      if (key.name === "e") {
+      if (key.name === "e" && management.strategy === "dotenv") {
         openEditor()
       } else if (key.name === "u") {
         setManageState("unregister-confirm")
@@ -163,6 +165,16 @@ export const ManageView = forwardRef<ManageViewHandle, ManageViewProps>(function
 
   const renderContent = () => {
     if (manageState === "registered" && management) {
+      if (management.strategy === "kubectl") {
+        return (
+          <box style={{ flexDirection: "column", paddingLeft: 1, paddingRight: 1, gap: 1, flexGrow: 1 }}>
+            <text content={t`${fg("#58A6FF")("Managed by:")} ${fg("#8B949E")("kubectl")}`} />
+            <text content="" />
+            <text content={t`${fg("#8B949E")("No source of truth. Secret is raw kubectl.")}`} />
+          </box>
+        )
+      }
+
       const statusColor = connectionStatus === "connected" ? "#3FB950"
         : connectionStatus === "failed" ? "#F85149"
         : connectionStatus === "checking" ? "#D29922"

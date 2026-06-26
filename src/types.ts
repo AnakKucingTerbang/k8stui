@@ -184,7 +184,7 @@ export interface EnvEntry {
 }
 
 export interface SecretManagement {
-  strategy: "dotenv"
+  strategy: "kubectl" | "dotenv"
   host: string
   path: string
 }
