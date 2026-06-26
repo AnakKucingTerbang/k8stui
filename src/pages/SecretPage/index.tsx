@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useKeyboard, useRenderer } from "@opentui/react"
 import { t, fg, type StyledText } from "@opentui/core"
+import { Panel } from "../../components/Panel"
 import { CommandsBar, type CommandItem } from "../../components/CommandsBar"
 import { Toast } from "../../components/Toast"
 import { copyToClipboard } from "../../utils/clipboard"
@@ -228,9 +229,6 @@ export function SecretPage({
 
   useKeyboard(handleKey)
 
-  const leftBorderColor = focus === "left" ? "#58A6FF" : "#30363D"
-  const rightBorderColor = focus === "right" ? "#58A6FF" : "#30363D"
-
   const rightTitle = useMemo(() => {
     if (activeView === "summary") return "SUMMARY"
     if (activeView === "keys") {
@@ -348,12 +346,7 @@ export function SecretPage({
   return (
     <>
       <box style={{ flexDirection: "row", flexGrow: 1, width: "100%", gap: 0, position: "relative" }}>
-        <box
-          title="VIEWS"
-          borderStyle="single"
-          borderColor={leftBorderColor}
-          style={{ flexDirection: "column", width: 20, gap: 0 }}
-        >
+        <Panel title="VIEWS" focused={focus === "left"} width={20} gap={0}>
           {LEFT_VIEWS.map((view, i) => {
             const isSelected = i === leftIndex
             const bgColor = isSelected ? "#1A3A5C" : undefined
@@ -365,16 +358,11 @@ export function SecretPage({
               </box>
             )
           })}
-        </box>
+        </Panel>
 
-        <box
-          title={rightTitle}
-          borderStyle="single"
-          borderColor={rightBorderColor}
-          style={{ flexDirection: "column", flexGrow: 1, gap: 0 }}
-        >
+        <Panel title={rightTitle} focused={focus === "right"} flexGrow={1} gap={0}>
           {renderRightContent()}
-        </box>
+        </Panel>
 
         {showRegisterModal && (
           <RegisterModal

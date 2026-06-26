@@ -1,4 +1,5 @@
 import { t, fg } from "@opentui/core"
+import { Panel } from "./Panel"
 
 export interface ManifestItem {
   label: string
@@ -15,39 +16,24 @@ interface ManifestsBoxProps {
 export function ManifestsBox({ items, selectedIndex, focused, spinner }: ManifestsBoxProps) {
   if (items === undefined) {
     return (
-      <box
-        title="MANIFESTS"
-        borderStyle="single"
-        borderColor={focused ? "#58A6FF" : "#30363D"}
-        style={{ flexDirection: "column", width: "100%" }}
-      >
+      <Panel title="MANIFESTS" focused={focused}>
         <text content={t`${fg("#D29922")(spinner)} ${fg("#8B949E")("Loading...")}`} />
-      </box>
+      </Panel>
     )
   }
 
   if (items.length === 0) {
     return (
-      <box
-        title="MANIFESTS"
-        borderStyle="single"
-        borderColor={focused ? "#58A6FF" : "#30363D"}
-        style={{ flexDirection: "column", width: "100%" }}
-      >
+      <Panel title="MANIFESTS" focused={focused}>
         <text fg="#8B949E" content="──" />
-      </box>
+      </Panel>
     )
   }
 
   const showSeparator = items.length >= 2
 
   return (
-    <box
-      title="MANIFESTS"
-      borderStyle="single"
-      borderColor={focused ? "#58A6FF" : "#30363D"}
-      style={{ flexDirection: "column", width: "100%" }}
-    >
+    <Panel title="MANIFESTS" focused={focused}>
       {items.map((item, i) => {
         const isSelected = i === selectedIndex
         const bgColor = isSelected ? "#1A3A5C" : undefined
@@ -66,6 +52,6 @@ export function ManifestsBox({ items, selectedIndex, focused, spinner }: Manifes
           </>
         )
       })}
-    </box>
+    </Panel>
   )
 }

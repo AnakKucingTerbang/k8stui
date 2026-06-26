@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useKeyboard } from "@opentui/react"
 import { t, fg } from "@opentui/core"
+import { Modal } from "../../components/Modal"
 import { CommandsBar, type CommandItem } from "../../components/CommandsBar"
 import { syncSecretFromEnv } from "../../utils/secret-sync"
 import { isPrintable } from "../../utils/keys"
@@ -365,36 +366,23 @@ export function EnvEditorModal({
   }
 
   return (
-    <box
-      style={{
-        position: "absolute",
-        top: modalTop,
-        left: modalLeft,
-        width: modalWidth,
-        height: modalHeight,
-        flexDirection: "column",
-        zIndex: 100,
-        backgroundColor: "#0D1117",
-      }}
+    <Modal
+      title={`.env editor -- ${header}`}
+      top={modalTop}
+      left={modalLeft}
+      width={modalWidth}
+      height={modalHeight}
+      footer={<CommandsBar commands={commands} />}
     >
-      <box
-        title={`.env editor -- ${header}`}
-        borderStyle="single"
-        borderColor="#58A6FF"
-        style={{ flexDirection: "column", flexGrow: 1, gap: 0 }}
-      >
-        <box style={{ height: 1, width: "100%", paddingLeft: 1 }}>
-          <text content={t`${fg("#58A6FF")("KEY".padEnd(KEY_COL))}${fg("#8B949E")("VALUE")}`} />
-        </box>
-        <scrollbox ref={scrollRef} scrollY={true} viewportCulling={true} style={{ width: "100%", flexGrow: 1 }} contentOptions={{ minHeight: "100%" }}>
-          {entries.map((entry, i) => renderEntry(entry, i))}
-          {renderAddRow()}
-        </scrollbox>
-        {renderStatusLine()}
-        {renderConfirmDiscard()}
+      <box style={{ height: 1, width: "100%", paddingLeft: 1 }}>
+        <text content={t`${fg("#58A6FF")("KEY".padEnd(KEY_COL))}${fg("#8B949E")("VALUE")}`} />
       </box>
-
-      <CommandsBar commands={commands} />
-    </box>
+      <scrollbox ref={scrollRef} scrollY={true} viewportCulling={true} style={{ width: "100%", flexGrow: 1 }} contentOptions={{ minHeight: "100%" }}>
+        {entries.map((entry, i) => renderEntry(entry, i))}
+        {renderAddRow()}
+      </scrollbox>
+      {renderStatusLine()}
+      {renderConfirmDiscard()}
+    </Modal>
   )
 }

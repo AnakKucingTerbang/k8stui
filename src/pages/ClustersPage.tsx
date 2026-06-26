@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from "react"
 import { useKeyboard, useTerminalDimensions } from "@opentui/react"
 import { t, fg } from "@opentui/core"
+import { Section } from "../components/Section"
 import { ClusterTable } from "../components/ClusterTable"
 import { CommandsBar, type CommandItem } from "../components/CommandsBar"
 import { LegendsBar } from "../components/LegendsBar"
@@ -234,16 +235,7 @@ export function ClustersPage({
         <SearchBar query={searchQuery} onInput={setSearchQuery} />
       )}
 
-      <box
-        title="CLUSTER"
-        borderStyle="single"
-        borderColor="#30363D"
-        style={{
-          flexDirection: "column",
-          flexGrow: 1,
-          width: "100%",
-        }}
-      >
+      <Section title="CLUSTER" flexGrow={1}>
         {loading ? (
           <box style={{ flexDirection: "column", alignItems: "center", justifyContent: "center", flexGrow: 1 }}>
             <text content={t`${fg("#D29922")(spinner)} ${fg("#8B949E")("Loading cluster data...")}`} />
@@ -269,7 +261,7 @@ export function ClustersPage({
             )}
           </box>
         )}
-      </box>
+      </Section>
 
       <LegendsBar />
 

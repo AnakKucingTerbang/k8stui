@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useKeyboard } from "@opentui/react"
 import { t, fg } from "@opentui/core"
+import { Section } from "../components/Section"
+import { Panel } from "../components/Panel"
 import { CommandsBar, type CommandItem } from "../components/CommandsBar"
 import { PodTable } from "../components/PodTable"
 import { ResourceListTable } from "../components/ResourceListTable"
@@ -176,9 +178,6 @@ export function NamespacePage({
 
   useKeyboard(handleKey)
 
-  const leftBorderColor = focus === "left" ? "#58A6FF" : "#30363D"
-  const rightBorderColor = focus === "right" ? "#58A6FF" : "#30363D"
-
   const rightTitle = useMemo(() => VIEW_TITLES[activeView], [activeView])
 
   const commands = useMemo<CommandItem[]>(() => {
@@ -227,24 +226,14 @@ export function NamespacePage({
 
   return (
     <>
-      <box
-        title={`NAMESPACE | ${namespace}`}
-        borderStyle="single"
-        borderColor="#30363D"
-        style={{ flexDirection: "column", height: 5, width: "100%" }}
-      >
+      <Section title={`NAMESPACE | ${namespace}`} height={5}>
         <box style={{ flexDirection: "row", paddingLeft: 1, paddingTop: 1, gap: 2 }}>
           <text content={t`${fg("#8B949E")("workloads:")} ${fg("#E6EDF3")(`${workloads.length}`)}  ${fg("#8B949E")("pods:")} ${fg("#E6EDF3")(`${pods.length}`)}  ${fg("#8B949E")("network:")} ${fg("#E6EDF3")(`${network.length}`)}  ${fg("#8B949E")("config:")} ${fg("#E6EDF3")(`${config.length}`)}`} />
         </box>
-      </box>
+      </Section>
 
       <box style={{ flexDirection: "row", flexGrow: 1, width: "100%", gap: 0 }}>
-        <box
-          title="VIEWS"
-          borderStyle="single"
-          borderColor={leftBorderColor}
-          style={{ flexDirection: "column", width: 20, gap: 0 }}
-        >
+        <Panel title="VIEWS" focused={focus === "left"} width={20} gap={0}>
           {LEFT_VIEWS.map((view, i) => {
             const isSelected = i === leftIndex
             const bgColor = isSelected ? "#1A3A5C" : undefined
@@ -256,16 +245,11 @@ export function NamespacePage({
               </box>
             )
           })}
-        </box>
+        </Panel>
 
-        <box
-          title={rightTitle}
-          borderStyle="single"
-          borderColor={rightBorderColor}
-          style={{ flexDirection: "column", flexGrow: 1, gap: 0 }}
-        >
+        <Panel title={rightTitle} focused={focus === "right"} flexGrow={1} gap={0}>
           {renderRightContent()}
-        </box>
+        </Panel>
       </box>
 
       <CommandsBar commands={commands} />

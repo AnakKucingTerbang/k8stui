@@ -1,4 +1,5 @@
 import { t, fg, bold } from "@opentui/core"
+import { Panel } from "./Panel"
 import type { PodDetailFull, DetailRow } from "../types"
 
 const DASH = "──"
@@ -66,12 +67,7 @@ export function PodBox({ pod, focused, scrollOffset, maxVisible }: PodBoxProps) 
   const visible = rows.slice(scrollOffset, scrollOffset + maxVisible)
 
   return (
-    <box
-      title="POD"
-      borderStyle="single"
-      borderColor={focused ? "#58A6FF" : "#30363D"}
-      style={{ flexDirection: "column", width: "100%", height: 10 }}
-    >
+    <Panel title="POD" focused={focused} height={10}>
       {visible.map((row, i) => {
         if (row.isParent) {
           return (
@@ -98,6 +94,6 @@ export function PodBox({ pod, focused, scrollOffset, maxVisible }: PodBoxProps) 
           </box>
         )
       })}
-    </box>
+    </Panel>
   )
 }

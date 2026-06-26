@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useKeyboard } from "@opentui/react"
 import { t, fg } from "@opentui/core"
+import { Section } from "../components/Section"
+import { Panel } from "../components/Panel"
 import { CommandsBar, type CommandItem } from "../components/CommandsBar"
 import type { PodDetail, DetailRow } from "../types"
 
@@ -96,12 +98,7 @@ export function StoragePage({
 
   return (
     <>
-      <box
-        title={`SUMMARY | PVC: ${name}`}
-        borderStyle="single"
-        borderColor="#30363D"
-        style={{ flexDirection: "column", height: Math.max(5, summary.length + 3), width: "100%" }}
-      >
+      <Section title={`SUMMARY | PVC: ${name}`} height={Math.max(5, summary.length + 3)}>
         {loading ? (
           <box style={{ flexDirection: "column", alignItems: "center", justifyContent: "center", flexGrow: 1 }}>
             <text content={t`${fg("#D29922")(spinner)} ${fg("#8B949E")("Loading...")}`} />
@@ -119,13 +116,8 @@ export function StoragePage({
             })}
           </box>
         )}
-      </box>
-      <box
-        title="MOUNT"
-        borderStyle="single"
-        borderColor="#58A6FF"
-        style={{ flexDirection: "column", flexGrow: 1, width: "100%" }}
-      >
+      </Section>
+      <Panel title="MOUNT" focused flexGrow={1}>
         {loading ? (
           <box style={{ flexDirection: "column", alignItems: "center", justifyContent: "center", flexGrow: 1 }}>
             <text content={t`${fg("#D29922")(spinner)} ${fg("#8B949E")("Loading...")}`} />
@@ -142,7 +134,7 @@ export function StoragePage({
             <text fg="#8B949E" content="No pod mounting this PVC" />
           </box>
         )}
-      </box>
+      </Panel>
 
       <CommandsBar commands={commands} />
     </>

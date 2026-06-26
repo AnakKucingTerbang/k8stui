@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useKeyboard } from "@opentui/react"
 import { t, fg } from "@opentui/core"
+import { Section } from "../components/Section"
+import { Panel } from "../components/Panel"
 import { CommandsBar, type CommandItem } from "../components/CommandsBar"
 import { PodTable } from "../components/PodTable"
 import type { PodDetail, DetailRow } from "../types"
@@ -101,12 +103,7 @@ export function ConfigPage({
 
   return (
     <>
-      <box
-        title={`SUMMARY | ${kind}: ${name}`}
-        borderStyle="single"
-        borderColor="#30363D"
-        style={{ flexDirection: "column", height: Math.max(5, summary.length + 3), width: "100%" }}
-      >
+      <Section title={`SUMMARY | ${kind}: ${name}`} height={Math.max(5, summary.length + 3)}>
         {loading ? (
           <box style={{ flexDirection: "column", alignItems: "center", justifyContent: "center", flexGrow: 1 }}>
             <text content={t`${fg("#D29922")(spinner)} ${fg("#8B949E")("Loading...")}`} />
@@ -124,13 +121,8 @@ export function ConfigPage({
             })}
           </box>
         )}
-      </box>
-      <box
-        title="REFS"
-        borderStyle="single"
-        borderColor="#58A6FF"
-        style={{ flexDirection: "column", flexGrow: 1, width: "100%" }}
-      >
+      </Section>
+      <Panel title="REFS" focused flexGrow={1}>
         {loading ? (
           <box style={{ flexDirection: "column", alignItems: "center", justifyContent: "center", flexGrow: 1 }}>
             <text content={t`${fg("#D29922")(spinner)} ${fg("#8B949E")("Loading...")}`} />
@@ -142,7 +134,7 @@ export function ConfigPage({
         ) : (
           <PodTable pods={pods} selectedIndex={podIndex} scrollRef={podScrollRef} />
         )}
-      </box>
+      </Panel>
 
       <CommandsBar commands={commands} />
     </>

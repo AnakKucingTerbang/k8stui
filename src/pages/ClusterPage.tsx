@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useKeyboard } from "@opentui/react"
 import { t, fg } from "@opentui/core"
+import { Section } from "../components/Section"
+import { Panel } from "../components/Panel"
 import { ClusterOverview } from "../components/ClusterOverview"
 import { CommandsBar, type CommandItem } from "../components/CommandsBar"
 import { NodeTable } from "../components/NodeTable"
@@ -246,9 +248,6 @@ export function ClusterPage({
 
   useKeyboard(handleKey)
 
-  const leftBorderColor = focus === "left" ? "#58A6FF" : "#30363D"
-  const rightBorderColor = focus === "right" ? "#58A6FF" : "#30363D"
-
   const rightTitle = useMemo(() => VIEW_TITLES[activeView], [activeView])
 
   const commands = useMemo<CommandItem[]>(() => {
@@ -314,22 +313,12 @@ export function ClusterPage({
 
   return (
     <>
-      <box
-        title="OVERVIEW"
-        borderStyle="single"
-        borderColor="#30363D"
-        style={{ flexDirection: "column", height: 7, width: "100%" }}
-      >
+      <Section title="OVERVIEW" height={7}>
         <ClusterOverview cluster={cluster} metricMode={metricMode} />
-      </box>
+      </Section>
 
       <box style={{ flexDirection: "row", flexGrow: 1, width: "100%", gap: 0 }}>
-        <box
-          title="VIEWS"
-          borderStyle="single"
-          borderColor={leftBorderColor}
-          style={{ flexDirection: "column", width: 20, gap: 0 }}
-        >
+        <Panel title="VIEWS" focused={focus === "left"} width={20} gap={0}>
           {LEFT_VIEWS.map((view, i) => {
             const isSelected = i === leftIndex
             const bgColor = isSelected ? "#1A3A5C" : undefined
@@ -341,16 +330,11 @@ export function ClusterPage({
               </box>
             )
           })}
-        </box>
+        </Panel>
 
-        <box
-          title={rightTitle}
-          borderStyle="single"
-          borderColor={rightBorderColor}
-          style={{ flexDirection: "column", flexGrow: 1, gap: 0 }}
-        >
+        <Panel title={rightTitle} focused={focus === "right"} flexGrow={1} gap={0}>
           {renderRightContent()}
-        </box>
+        </Panel>
       </box>
 
       <CommandsBar commands={commands} />

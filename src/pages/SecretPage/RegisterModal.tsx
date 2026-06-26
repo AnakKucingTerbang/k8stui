@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useKeyboard } from "@opentui/react"
 import { t, fg } from "@opentui/core"
+import { Modal } from "../../components/Modal"
 import { CommandsBar, type CommandItem } from "../../components/CommandsBar"
 import { sshTestConnection, sshCreateEmptyFile, sshReadFile } from "../../utils/ssh"
 import { parseDotenv } from "../../utils/dotenv"
@@ -407,28 +408,15 @@ export function RegisterModal({
   }
 
   return (
-    <box
-      style={{
-        position: "absolute",
-        top: modalTop,
-        left: modalLeft,
-        width: modalWidth,
-        height: modalHeight,
-        flexDirection: "column",
-        zIndex: 100,
-        backgroundColor: "#0D1117",
-      }}
+    <Modal
+      title="register .env"
+      top={modalTop}
+      left={modalLeft}
+      width={modalWidth}
+      height={modalHeight}
+      footer={<CommandsBar commands={commands} />}
     >
-      <box
-        title="register .env"
-        borderStyle="single"
-        borderColor="#58A6FF"
-        style={{ flexDirection: "column", flexGrow: 1, gap: 0 }}
-      >
-        {renderContent()}
-      </box>
-
-      <CommandsBar commands={commands} />
-    </box>
+      {renderContent()}
+    </Modal>
   )
 }

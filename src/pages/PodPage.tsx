@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/react"
 import { t, fg, bold } from "@opentui/core"
+import { Section } from "../components/Section"
+import { Panel } from "../components/Panel"
 import { PodHeader } from "../components/PodHeader"
 import { ContainersBox } from "../components/ContainersBox"
 import { ApplicationBox } from "../components/ApplicationBox"
@@ -713,12 +715,7 @@ export function PodPage({
         </box>
 
         <box style={{ flexDirection: "column", flexGrow: 1, gap: 0 }}>
-          <box
-            title={detailsTitle}
-            borderStyle="single"
-            borderColor={detailsBorderColor}
-            style={{ flexDirection: "column", flexGrow: 1 }}
-          >
+          <Panel title={detailsTitle} borderColor={detailsBorderColor} flexGrow={1}>
             {isLogsView ? (
               <LogView
                 lines={logs}
@@ -744,15 +741,10 @@ export function PodPage({
                 spinner={localSpinner}
               />
             )}
-          </box>
-          <box
-            title="SELECTED"
-            borderStyle="single"
-            borderColor="#30363D"
-            style={{ flexDirection: "column", height: 3 }}
-          >
+          </Panel>
+          <Section title="SELECTED" height={3}>
             <text content={typeof selectedDisplay === "string" ? selectedDisplay : selectedDisplay} />
-          </box>
+          </Section>
         </box>
         <Toast message={toastMessage} />
       </box>
