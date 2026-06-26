@@ -52,24 +52,20 @@ jobs:
         run: |
           VERSION_NUM="${VERSION#v}"
           REPO="AnakKucingTerbang/homebrew-k8stui"
-          BASE_URL="https://github.com/AnakKucingTerbang/k8stui/releases/download/${VERSION}"
-
           git clone https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/${REPO}.git tap-repo
           cd tap-repo
 
           sed -i "s|version \".*\"|version \"${VERSION_NUM}\"|" Formula/k8stui.rb
 
-          sed -i "/k8stui-macos-arm64/{n;s|url \".*\"|url \"${BASE_URL}/k8stui-macos-arm64\"|}" Formula/k8stui.rb
-          sed -i "/k8stui-macos-arm64/{n;n;s|sha256 \".*\"|sha256 \"${MACOS_ARM64}\"|}" Formula/k8stui.rb
+          sed -i "s|releases/download/v[^/]*/k8stui-macos-arm64|releases/download/${VERSION}/k8stui-macos-arm64|" Formula/k8stui.rb
+          sed -i "s|releases/download/v[^/]*/k8stui-macos-x64|releases/download/${VERSION}/k8stui-macos-x64|" Formula/k8stui.rb
+          sed -i "s|releases/download/v[^/]*/k8stui-linux-arm64|releases/download/${VERSION}/k8stui-linux-arm64|" Formula/k8stui.rb
+          sed -i "s|releases/download/v[^/]*/k8stui-linux-x64\"|releases/download/${VERSION}/k8stui-linux-x64\"|" Formula/k8stui.rb
 
-          sed -i "/k8stui-macos-x64/{n;s|url \".*\"|url \"${BASE_URL}/k8stui-macos-x64\"|}" Formula/k8stui.rb
-          sed -i "/k8stui-macos-x64/{n;n;s|sha256 \".*\"|sha256 \"${MACOS_X64}\"|}" Formula/k8stui.rb
-
-          sed -i "/k8stui-linux-arm64/{n;s|url \".*\"|url \"${BASE_URL}/k8stui-linux-arm64\"|}" Formula/k8stui.rb
-          sed -i "/k8stui-linux-arm64/{n;n;s|sha256 \".*\"|sha256 \"${LINUX_ARM64}\"|}" Formula/k8stui.rb
-
-          sed -i "/k8stui-linux-x64/{n;s|url \".*\"|url \"${BASE_URL}/k8stui-linux-x64\"|}" Formula/k8stui.rb
-          sed -i "/k8stui-linux-x64/{n;n;s|sha256 \".*\"|sha256 \"${LINUX_X64}\"|}" Formula/k8stui.rb
+          sed -i "/k8stui-macos-arm64/{n;s|sha256 \".*\"|sha256 \"${MACOS_ARM64}\"|}" Formula/k8stui.rb
+          sed -i "/k8stui-macos-x64/{n;s|sha256 \".*\"|sha256 \"${MACOS_X64}\"|}" Formula/k8stui.rb
+          sed -i "/k8stui-linux-arm64/{n;s|sha256 \".*\"|sha256 \"${LINUX_ARM64}\"|}" Formula/k8stui.rb
+          sed -i "/k8stui-linux-x64\"/{n;s|sha256 \".*\"|sha256 \"${LINUX_X64}\"|}" Formula/k8stui.rb
 
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
