@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.1](https://github.com/AnakKucingTerbang/k8stui/compare/v0.7.0...v0.7.1) (2026-06-26)
+
+
+### Bug Fixes
+
+* **ci:** simplify homebrew formula url and sha256 sed replacements ([25779d3](https://github.com/AnakKucingTerbang/k8stui/commit/25779d39c586a5f29619ad3b0a355fccfa41f2bc))
+
 # [0.7.0](https://github.com/AnakKucingTerbang/k8stui/compare/v0.6.9...v0.7.0) (2026-06-26)
 
 
