@@ -1,5 +1,18 @@
 # Changelog
 
+# [0.7.0](https://github.com/AnakKucingTerbang/k8stui/compare/v0.6.9...v0.7.0) (2026-06-26)
+
+
+### Bug Fixes
+
+* **ci:** add homebrew formula auto-update to release workflow ([74bc2a3](https://github.com/AnakKucingTerbang/k8stui/commit/74bc2a3841f247b7cc02f744a2de3120ad709cdb))
+* **release:** disable npm publish in release-it config ([9f1a100](https://github.com/AnakKucingTerbang/k8stui/commit/9f1a100019f0329b87b51193edb78263a77cd8fc))
+
+
+### Features
+
+* **namespace:** add secret modal with kubectl and .env strategies ([633a7cc](https://github.com/AnakKucingTerbang/k8stui/commit/633a7cc2619776d8f88fab6c795ed915c5533403))
+
 ## [0.6.9](https://github.com/AnakKucingTerbang/k8stui/compare/v0.6.8...v0.6.9) (2026-06-25)
 
 
