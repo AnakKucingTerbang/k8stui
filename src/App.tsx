@@ -11,7 +11,7 @@ import { NetworkPage } from "./pages/NetworkPage"
 import { StoragePage } from "./pages/StoragePage"
 import { ConfigPage } from "./pages/ConfigPage"
 import { SecretPage } from "./pages/SecretPage"
-import { PodPage } from "./pages/PodPage"
+import { PodPage } from "./pages/PodPage/index"
 import type {
   Cluster, KubeContext, MetricMode, NodeDetail, NodeCondition,
   NamespaceInfo, ClusterResource, PodDetail, PodDetailFull,
