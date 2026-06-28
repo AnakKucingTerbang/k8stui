@@ -1,5 +1,12 @@
 # Changelog
 
+# [0.8.0](https://github.com/AnakKucingTerbang/k8stui/compare/v0.7.1...v0.8.0) (2026-06-28)
+
+
+### Features
+
+* **namespace:** add delete secret with .env cleanup option ([dfdb81a](https://github.com/AnakKucingTerbang/k8stui/commit/dfdb81a9d42f1040e63f15416946a3c5b44a18c8))
+
 ## [0.7.1](https://github.com/AnakKucingTerbang/k8stui/compare/v0.7.0...v0.7.1) (2026-06-26)
 
 
