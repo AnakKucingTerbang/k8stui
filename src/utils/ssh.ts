@@ -236,6 +236,13 @@ export async function sshCreateEmptyFile(hostString: string, filePath: string): 
   await sshWriteFile(hostString, filePath, "")
 }
 
+export async function sshDeleteFile(hostString: string, filePath: string): Promise<void> {
+  const result = await sshExec(hostString, `rm -f "${filePath}"`)
+  if (result.code !== 0) {
+    throw new Error(`rm failed: ${result.stderr || result.stdout}`)
+  }
+}
+
 export async function sshMkdirP(hostString: string, dirPath: string): Promise<void> {
   const result = await sshExec(hostString, `mkdir -p "${dirPath}"`)
   if (result.code !== 0) {

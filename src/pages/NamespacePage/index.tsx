@@ -8,6 +8,7 @@ import { PodTable } from "../../components/PodTable"
 import { ResourceListTable } from "../../components/ResourceListTable"
 import { Toast } from "../../components/Toast"
 import { AddSecretModal } from "./AddSecretModal"
+import { DeleteSecretModal } from "./DeleteSecretModal"
 import type { PodDetail, NamespacedResource, MetricMode } from "../../types"
 
 const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
@@ -80,6 +81,8 @@ export function NamespacePage({
   const [cfgIndex, setCfgIndex] = useState(0)
   const [spinnerFrame, setSpinnerFrame] = useState(0)
   const [showAddSecretModal, setShowAddSecretModal] = useState(false)
+  const [showDeleteSecretModal, setShowDeleteSecretModal] = useState(false)
+  const [deleteSecretName, setDeleteSecretName] = useState("")
   const [toastMessage, setToastMessage] = useState("")
   const spinnerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -101,9 +104,15 @@ export function NamespacePage({
     onRefresh()
   }, [onRefresh])
 
+  const handleDeleteSecretCreated = useCallback(() => {
+    setShowDeleteSecretModal(false)
+    setDeleteSecretName("")
+    onRefresh()
+  }, [onRefresh])
+
   const termWidth = renderer.width ?? 120
   const termHeight = renderer.height ?? 40
-  const modalActive = showAddSecretModal
+  const modalActive = showAddSecretModal || showDeleteSecretModal
 
   const activeView = LEFT_VIEWS[leftIndex]!
 
@@ -198,6 +207,12 @@ export function NamespacePage({
         }
       } else if (key.name === "a" && focus === "right" && activeView === "config") {
         setShowAddSecretModal(true)
+      } else if (key.name === "d" && focus === "right" && activeView === "config") {
+        const res = config[cfgIndex]
+        if (res && res.kind === "Secret") {
+          setDeleteSecretName(res.name)
+          setShowDeleteSecretModal(true)
+        }
       } else if (key.name === "q") {
         onQuit()
       }
@@ -218,6 +233,10 @@ export function NamespacePage({
       ]
       if (activeView === "config") {
         baseCommands.push({ key: "[a]", label: "add secret" })
+        const selected = config[cfgIndex]
+        if (selected && selected.kind === "Secret") {
+          baseCommands.push({ key: "[d]", label: "delete secret" })
+        }
       }
       baseCommands.push({ key: "[esc]", label: "back" })
       baseCommands.push({ key: "[q]", label: "uit" })
@@ -230,7 +249,7 @@ export function NamespacePage({
       { key: "[esc]", label: "back" },
       { key: "[q]", label: "uit" },
     ]
-  }, [focus, activeView])
+  }, [focus, activeView, config, cfgIndex])
 
   const renderRightContent = () => {
     if (loading) {
@@ -295,6 +314,20 @@ export function NamespacePage({
           spinner={spinner}
           onClose={() => setShowAddSecretModal(false)}
           onCreated={handleAddSecretCreated}
+          onToast={toast}
+        />
+      )}
+
+      {showDeleteSecretModal && (
+        <DeleteSecretModal
+          namespace={namespace}
+          secretName={deleteSecretName}
+          contextName={contextName}
+          termWidth={termWidth}
+          termHeight={termHeight}
+          spinner={spinner}
+          onClose={() => { setShowDeleteSecretModal(false); setDeleteSecretName("") }}
+          onDeleted={handleDeleteSecretCreated}
           onToast={toast}
         />
       )}

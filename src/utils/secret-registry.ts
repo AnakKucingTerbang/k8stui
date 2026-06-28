@@ -95,6 +95,22 @@ export async function unregisterSecret(
   return result.includes("annotated") || result.includes("unannotation")
 }
 
+export async function deleteSecret(
+  context: string,
+  namespace: string,
+  name: string,
+): Promise<{ success: boolean; output: string }> {
+  const result = await kubectlContextAsync(
+    context,
+    `delete secret ${name} -n ${namespace} --ignore-not-found`,
+    15000,
+  )
+  if (result.includes("deleted") || result.includes("not found")) {
+    return { success: true, output: result }
+  }
+  return { success: false, output: result || "delete failed" }
+}
+
 export async function reannotateSecret(
   contextName: string,
   namespace: string,
