@@ -1,8 +1,8 @@
-export type LeftBox = "containers" | "application" | "manifests" | "logs"
+export type LeftBox = "containers" | "application" | "manifests" | "logs" | "portforward"
 export type FocusTarget = LeftBox | "details"
 export type YamlEditMode = "view" | "edit"
 
-export const LEFT_ORDER: LeftBox[] = ["containers", "application", "manifests", "logs"]
+export const LEFT_ORDER: LeftBox[] = ["containers", "application", "manifests", "logs", "portforward"]
 
 export const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
 

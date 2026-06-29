@@ -41,6 +41,20 @@ interface UseKeyboardHandlerArgs {
   onQuit: () => void
   onEdit: () => void
   onToast: (msg: string) => void
+  onOpenPortForward: () => void
+  showPortForwardModal: boolean
+}
+
+function isPortsRow(rows: DetailRow[], idx: number): boolean {
+  const row = rows[idx]
+  if (!row) return false
+  if (row.key === "Ports" && row.isParent) return true
+  if (row.key === "Port Forwards" && row.isParent) return true
+  if (row.indent && idx > 0) {
+    const prev = rows[idx - 1]
+    if ((prev?.key === "Ports" && prev.isParent) || (prev?.key === "Port Forwards" && prev.isParent)) return true
+  }
+  return false
 }
 
 export function useKeyboardHandler({
@@ -76,13 +90,16 @@ export function useKeyboardHandler({
   onQuit,
   onEdit,
   onToast,
+  onOpenPortForward,
+  showPortForwardModal,
 }: UseKeyboardHandlerArgs) {
-  const LEFT_ORDER: LeftBox[] = ["containers", "application", "manifests", "logs"]
+  const LEFT_ORDER: LeftBox[] = ["containers", "application", "manifests", "logs", "portforward"]
   const currentLeftIndex = LEFT_ORDER.indexOf(focus as LeftBox)
 
   return useCallback(
     (key: { name: string; ctrl: boolean; shift: boolean }) => {
       if (yamlEditMode === "edit") return
+      if (showPortForwardModal) return
 
       if (key.name === "escape") {
         onBack()
@@ -142,6 +159,10 @@ export function useKeyboardHandler({
           if (containerIndex > 0) setContainerIndex((i) => i - 1)
           setDetailScrollOffset(0)
           setDetailRowIndex(-1)
+        } else if (focus === "portforward") {
+          if (containerIndex > 0) setContainerIndex((i) => i - 1)
+          setDetailScrollOffset(0)
+          setDetailRowIndex(-1)
         }
       } else if (key.name === "down") {
         if (focus === "details" && isLogsView) {
@@ -175,14 +196,25 @@ export function useKeyboardHandler({
           if (containerIndex < max - 1) setContainerIndex((i) => i + 1)
           setDetailScrollOffset(0)
           setDetailRowIndex(-1)
+        } else if (focus === "portforward") {
+          const max = podDetailFull?.containers.length ?? 0
+          if (containerIndex < max - 1) setContainerIndex((i) => i + 1)
+          setDetailScrollOffset(0)
+          setDetailRowIndex(-1)
         }
       } else if (key.name === "return") {
         if (focus === "details" && detailsRows && detailRowIndex >= 0) {
-          const row = detailsRows[detailRowIndex]
-          if (row && !row.isParent && row.value) {
-            copyToClipboard(row.value)
-            onToast("value copied to clipboard")
+          if (isPortsRow(detailsRows, detailRowIndex)) {
+            onOpenPortForward()
+          } else {
+            const row = detailsRows[detailRowIndex]
+            if (row && !row.isParent && row.value) {
+              copyToClipboard(row.value)
+              onToast("value copied to clipboard")
+            }
           }
+        } else if (focus === "portforward") {
+          onOpenPortForward()
         }
       } else if (key.name === "e") {
         if (canEdit) onEdit()
@@ -249,7 +281,8 @@ export function useKeyboardHandler({
       focus, lastLeftBox, containerIndex, appResourceIndex, manifestIndex,
       podDetailFull, manifestItems?.length, detailsRows, detailRowIndex,
       isYamlDetails, isLogsView, logsWrap, yamlEditMode, canEdit, maxVisibleRows,
-      detailScrollOffset, onBack, onQuit, onEdit, onToast,
+      detailScrollOffset, onBack, onQuit, onEdit, onToast, onOpenPortForward,
+      showPortForwardModal,
       setFocus, setLastLeftBox, setContainerIndex, setAppResourceIndex,
       setManifestIndex, setDetailScrollOffset, setDetailRowIndex,
       setLogsWrap, setLogsPrevious, setLogsSinceKey,

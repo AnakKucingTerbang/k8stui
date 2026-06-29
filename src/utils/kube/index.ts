@@ -3,5 +3,6 @@ export { formatAge, parsePodStatus, parseProbe, parseNodesJson, parseTopNodes, p
 export { loadContextsAsync, fetchClusterStatusAsync, fetchClusterResourcesAsync, fetchNamespacesAsync, fetchClusterDetailDataAsync } from "./cluster"
 export { fetchNodeDetailsAsync, fetchPodsForNodeAsync, fetchNodeConditionsAsync } from "./node"
 export { fetchPodDetailAsync, fetchApplicationResourcesAsync, applyYamlAsync } from "./pod"
+export { startPortForward, isLocalPortInUse, findFreeLocalPort, type PortForwardHandle } from "./portforward"
 export { fetchNamespaceDetailAsync } from "./namespace"
 export { fetchWorkloadDetailAsync, fetchNetworkDetailAsync, fetchStorageDetailAsync, fetchConfigDetailAsync, fetchSecretDetailAsync } from "./resource"

@@ -12,8 +12,10 @@ import { LogsBox } from "../../components/LogsBox"
 import { LogView } from "../../components/LogView"
 import { CommandsBar, type CommandItem } from "../../components/CommandsBar"
 import { Toast } from "../../components/Toast"
+import { PortForwardBox } from "../../components/PortForwardBox"
 import { getSinceOption } from "../../utils/kube-logs"
-import type { PodDetail, PodDetailFull, PodContainer, DetailRow } from "../../types"
+import type { PortForwardHandle } from "../../utils/kube/portforward"
+import type { PodDetail, PodDetailFull, PodContainer, DetailRow, PortForwardEntry } from "../../types"
 import {
   SPINNER_FRAMES,
   LEFT_ORDER,
@@ -25,6 +27,7 @@ import {
 import { useLogStream } from "./useLogStream"
 import { useKeyboardHandler } from "./useKeyboardHandler"
 import { useYamlEdit } from "./useYamlEdit"
+import { PortForwardModal } from "./PortForwardModal"
 
 const DASH = "──"
 const KEY_WIDTH = 12
@@ -44,7 +47,15 @@ function buildContainerRows(container: PodContainer): DetailRow[] {
   rows.push({ key: "Image", value: val(container.image) })
   if (container.command.length > 0) rows.push({ key: "Command", value: container.command.join(" ") })
   if (container.args.length > 0) rows.push({ key: "Args", value: container.args.join(" ") })
-  if (container.ports.length > 0) rows.push({ key: "Ports", value: container.ports.join(", ") })
+  if (container.ports.length > 0) {
+    rows.push({ key: "Ports", value: "", isParent: true })
+    for (const p of container.ports) {
+      rows.push({ key: p, value: "", indent: true })
+    }
+  } else {
+    rows.push({ key: "Ports", value: "", isParent: true })
+    rows.push({ key: "none declared", value: "", indent: true })
+  }
   rows.push({ key: "CPU Request", value: val(container.cpuRequest) })
   rows.push({ key: "CPU Limit", value: val(container.cpuLimit) })
   rows.push({ key: "Mem Request", value: val(container.memRequest) })
@@ -100,6 +111,10 @@ export function PodPage({
   const [detailRowIndex, setDetailRowIndex] = useState(-1)
   const [toastMessage, setToastMessage] = useState("")
   const [spinnerFrame, setSpinnerFrame] = useState(0)
+  const [showPortForwardModal, setShowPortForwardModal] = useState(false)
+  const [activePortForwards, setActivePortForwards] = useState<PortForwardHandle[]>([])
+  const activePortForwardsRef = useRef<PortForwardHandle[]>([])
+  activePortForwardsRef.current = activePortForwards
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const spinnerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const yamlScrollRef = useRef<any>(null)
@@ -112,6 +127,12 @@ export function PodPage({
     setContainerIndex(0)
     setAppResourceIndex(0)
     setManifestIndex(0)
+  }, [pod.name])
+
+  useEffect(() => {
+    for (const f of activePortForwardsRef.current) f.abort()
+    setActivePortForwards([])
+    setShowPortForwardModal(false)
   }, [pod.name])
 
   useEffect(() => {
@@ -130,6 +151,14 @@ export function PodPage({
   }, [isLoading])
 
   useEffect(() => {
+    return () => {
+      for (const f of activePortForwardsRef.current) {
+        f.abort()
+      }
+    }
+  }, [])
+
+  useEffect(() => {
     if (focus !== "details") {
       yamlEdit.setYamlEditMode("view")
     }
@@ -139,6 +168,18 @@ export function PodPage({
     setToastMessage(msg)
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current)
     toastTimerRef.current = setTimeout(() => setToastMessage(""), 5000)
+  }, [])
+
+  const handleAddForward = useCallback((handle: PortForwardHandle) => {
+    setActivePortForwards((prev) => [...prev, handle])
+  }, [])
+
+  const handleRemoveForward = useCallback((handle: PortForwardHandle) => {
+    setActivePortForwards((prev) => prev.filter((f) => f !== handle))
+  }, [])
+
+  const handleClosePortForwardModal = useCallback(() => {
+    setShowPortForwardModal(false)
   }, [])
 
   const { height: termHeight } = useTerminalDimensions()
@@ -184,6 +225,15 @@ export function PodPage({
     if (manifestIndex > max && max >= 0) setManifestIndex(max)
   }, [manifestItems?.length, manifestIndex])
 
+  const portForwardEntries = useMemo((): PortForwardEntry[] => {
+    return activePortForwards.map((h) => ({
+      localPort: h.localPort,
+      containerPort: h.containerPort,
+      containerName: h.containerName,
+      protocol: h.protocol,
+    }))
+  }, [activePortForwards])
+
   const detailsRows = useMemo((): DetailRow[] | undefined => {
     if (!podDetailFull) return undefined
     if (lastLeftBox === "containers") {
@@ -194,8 +244,20 @@ export function PodPage({
       const r = podDetailFull.appResources?.[appResourceIndex]
       return r ? r.summaryRows : undefined
     }
+    if (lastLeftBox === "portforward") {
+      const rows: DetailRow[] = []
+      if (portForwardEntries.length === 0) {
+        rows.push({ key: "Port Forwards", value: "none" })
+      } else {
+        rows.push({ key: "Port Forwards", value: "", isParent: true })
+        for (const pf of portForwardEntries) {
+          rows.push({ key: `${pf.containerPort}/${pf.protocol}`, value: `localhost:${pf.localPort}`, indent: true })
+        }
+      }
+      return rows
+    }
     return undefined
-  }, [podDetailFull, lastLeftBox, containerIndex, appResourceIndex])
+  }, [podDetailFull, lastLeftBox, containerIndex, appResourceIndex, portForwardEntries])
 
   const detailsYaml = useMemo((): string | undefined => {
     if (lastLeftBox !== "manifests" || !podDetailFull) return undefined
@@ -254,6 +316,8 @@ export function PodPage({
       yamlEdit.setEditedYaml(activeYaml)
     },
     onToast: toast,
+    onOpenPortForward: () => setShowPortForwardModal(true),
+    showPortForwardModal,
   })
 
   useKeyboard(handleKey)
@@ -348,6 +412,18 @@ export function PodPage({
         ]
       }
       if (detailsRows && !isYamlDetails) {
+        const isPortsRow = detailsRows[detailRowIndex]?.key === "Ports" && detailsRows[detailRowIndex]?.isParent
+        const isPortIndent = detailsRows[detailRowIndex]?.indent === true && detailRowIndex > 0 && detailsRows[detailRowIndex - 1]?.key === "Ports"
+        if (isPortIndent || isPortsRow) {
+          return [
+            { key: "[↑↓]", label: "scroll" },
+            { key: "[enter]", label: "forward" },
+            { key: "[pgup/pgdn]", label: "page" },
+            { key: "[←]", label: "focus left" },
+            { key: "[esc]", label: "back" },
+            { key: "[q]", label: "uit" },
+          ]
+        }
         return [
           { key: "[↑↓]", label: "scroll" },
           { key: "[enter]", label: "copy" },
@@ -366,6 +442,15 @@ export function PodPage({
     if (focus === "logs") {
       return [
         { key: "[→]", label: "logs" },
+        { key: "[↑↓]", label: "container" },
+        { key: "[esc]", label: "back" },
+        { key: "[q]", label: "uit" },
+      ]
+    }
+    if (focus === "portforward") {
+      return [
+        { key: "[enter]", label: "forward" },
+        { key: "[→]", label: "details" },
         { key: "[↑↓]", label: "container" },
         { key: "[esc]", label: "back" },
         { key: "[q]", label: "uit" },
@@ -413,6 +498,10 @@ export function PodPage({
       const prefix = logsPrevious ? "PREV LOGS" : "LOGS"
       return `${prefix}: ${containerName}`
     }
+    if (lastLeftBox === "portforward") {
+      const containerName = podDetailFull?.containers[containerIndex]?.name || "──"
+      return `PORT-FWD: ${containerName}`
+    }
     return "DETAILS"
   }, [yamlEdit.yamlEditMode, lastLeftBox, podDetailFull, containerIndex, appResourceIndex, manifestIndex, manifestItems, isLiveManifest, editingLabel, logsPrevious])
 
@@ -452,6 +541,11 @@ export function PodPage({
             wrap={logsWrap}
             spinner={localSpinner}
           />
+
+          <PortForwardBox
+            forwards={portForwardEntries}
+            focused={leftBoxFocused("portforward")}
+          />
         </box>
 
         <box style={{ flexDirection: "column", flexGrow: 1, gap: 0 }}>
@@ -488,6 +582,19 @@ export function PodPage({
         </box>
         <Toast message={toastMessage} />
       </box>
+
+      {showPortForwardModal && podDetailFull && (
+        <PortForwardModal
+          podDetailFull={podDetailFull}
+          containerIndex={containerIndex}
+          contextName={contextName}
+          activeForwards={activePortForwards}
+          onAddForward={handleAddForward}
+          onRemoveForward={handleRemoveForward}
+          onClose={handleClosePortForwardModal}
+          onToast={toast}
+        />
+      )}
 
       <CommandsBar commands={commands} />
     </>

@@ -206,3 +206,10 @@ export interface ComparisonResult {
   onlyInCluster: { key: string; clusterValue: string }[]
   onlyInEnv: { key: string; envValue: string }[]
 }
+
+export interface PortForwardEntry {
+  localPort: number
+  containerPort: number
+  containerName: string
+  protocol: string
+}
