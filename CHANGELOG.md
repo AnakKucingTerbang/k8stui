@@ -1,5 +1,12 @@
 # Changelog
 
+# [0.9.0](https://github.com/AnakKucingTerbang/k8stui/compare/v0.8.0...v0.9.0) (2026-06-29)
+
+
+### Features
+
+* **portforward:** add port-forward feature for pod containers ([162e2d3](https://github.com/AnakKucingTerbang/k8stui/commit/162e2d3fff66fadd11eee0d774383d6c4821584c))
+
 # [0.8.0](https://github.com/AnakKucingTerbang/k8stui/compare/v0.7.1...v0.8.0) (2026-06-28)
 
 
