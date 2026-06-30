@@ -71,6 +71,7 @@ When told to commit, infer the conventional type from the change and format the 
 ## Rules
 
 - **NEVER** run `git add`, `git commit`, `git push`, `npm publish`, or any write git/npm command unless the user explicitly says to
+- **NEVER** use `git add -f` (or any git force flag) without the user's explicit permission. If a file is in `.gitignore`, ask the user first — do not override their intent
 - When told to commit, write the message in conventional commit format based on the nature of the change
 - When changes are ready for a release, remind the user to run `bunx release-it` themselves (npm 2FA requires their OTP)
 
