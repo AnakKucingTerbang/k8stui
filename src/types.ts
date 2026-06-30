@@ -194,6 +194,11 @@ export interface CustomGroup {
   kinds: ApiResourceKind[]
 }
 
+export interface CustomResourceDetailData {
+  summary: DetailRow[]
+  yaml: string
+}
+
 export interface EnvEntry {
   key: string
   value: string

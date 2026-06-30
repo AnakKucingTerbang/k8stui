@@ -55,6 +55,7 @@ interface NamespacePageProps {
   onOpenPod: (pod: PodDetail) => void
   onOpenNetwork: (kind: string, name: string, namespace: string) => void
   onOpenConfig: (kind: string, name: string, namespace: string) => void
+  onOpenCustomResource: (kind: string, name: string, namespace: string) => void
   onBack: () => void
   onQuit: () => void
   onRefresh: () => void
@@ -76,6 +77,7 @@ export function NamespacePage({
   onOpenPod,
   onOpenNetwork,
   onOpenConfig,
+  onOpenCustomResource,
   onBack,
   onQuit,
   onRefresh,
@@ -256,7 +258,7 @@ export function NamespacePage({
         if (focus === "right") {
           if (leftMode === "custom") {
             const res = activeCustomResources[customResIndex]
-            if (res) onOpenConfig(res.kind, res.name, res.namespace)
+            if (res) onOpenCustomResource(res.kind, res.name, res.namespace)
           } else if (activeView === "workloads") {
             const res = workloads[wlIndex]
             if (res) onOpenWorkload(res.kind, res.name, res.namespace)
@@ -283,7 +285,7 @@ export function NamespacePage({
         onQuit()
       }
     },
-    [focus, leftMode, leftIndex, activeView, wlIndex, podIndex, netIndex, cfgIndex, customGroupIndex, customResIndex, workloads, pods, network, config, visibleGroups, activeCustomResources, currentList, onOpenWorkload, onOpenPod, onOpenNetwork, onOpenConfig, onBack, onQuit, scrollIntoView, modalActive, namespace],
+    [focus, leftMode, leftIndex, activeView, wlIndex, podIndex, netIndex, cfgIndex, customGroupIndex, customResIndex, workloads, pods, network, config, visibleGroups, activeCustomResources, currentList, onOpenWorkload, onOpenPod, onOpenNetwork, onOpenConfig, onOpenCustomResource, onBack, onQuit, scrollIntoView, modalActive, namespace],
   )
 
   useKeyboard(handleKey)

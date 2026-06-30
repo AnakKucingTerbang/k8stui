@@ -11,12 +11,13 @@ import { NetworkPage } from "./pages/NetworkPage"
 import { StoragePage } from "./pages/StoragePage"
 import { ConfigPage } from "./pages/ConfigPage"
 import { SecretPage } from "./pages/SecretPage"
+import { CustomResourcePage } from "./pages/CustomResourcePage"
 import { PodPage } from "./pages/PodPage/index"
 import type {
   Cluster, KubeContext, MetricMode, NodeDetail, NodeCondition,
   NamespaceInfo, ClusterResource, PodDetail, PodDetailFull,
   NamespacedResource, DetailRow, ResourceCategory,   SecretDetailData,
-  CustomGroup,
+  CustomGroup, CustomResourceDetailData,
 } from "./types"
 import {
   loadContextsAsync,
@@ -35,6 +36,7 @@ import {
   fetchSecretDetailAsync,
   fetchApiGroupsAsync,
   fetchAllCustomResourcesAsync,
+  fetchCustomResourceDetailAsync,
 } from "./utils/kube"
 
 type NavEntry =
@@ -46,6 +48,7 @@ type NavEntry =
   | { page: "network"; kind: string; name: string; namespace: string }
   | { page: "storage"; name: string; namespace: string }
   | { page: "config"; kind: string; name: string; namespace: string }
+  | { page: "custom"; kind: string; name: string; namespace: string }
   | { page: "pod"; pod: PodDetail }
 
 const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
@@ -112,6 +115,9 @@ export function App({ renderer }: AppProps) {
   const [customGroups, setCustomGroups] = useState<CustomGroup[]>([])
   const [customResourceMap, setCustomResourceMap] = useState<Record<string, NamespacedResource[]>>({})
   const [customLoading, setCustomLoading] = useState(false)
+
+  const [customDetailData, setCustomDetailData] = useState<CustomResourceDetailData | null>(null)
+  const [customDetailLoading, setCustomDetailLoading] = useState(false)
 
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const spinnerRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -411,6 +417,16 @@ export function App({ renderer }: AppProps) {
     })
   }, [currentContext, stack])
 
+  const handleOpenCustomResource = useCallback((kind: string, name: string, namespace: string) => {
+    setCustomDetailData(null)
+    setCustomDetailLoading(true)
+    push({ page: "custom", kind, name, namespace })
+    fetchCustomResourceDetailAsync(currentContext, namespace, kind, name).then((data) => {
+      setCustomDetailData(data)
+      setCustomDetailLoading(false)
+    })
+  }, [currentContext, push])
+
   const handleToggleMetric = useCallback(() => {
     setMetricMode((prev) => prev === "pct" ? "raw" : "pct")
   }, [])
@@ -427,8 +443,9 @@ export function App({ renderer }: AppProps) {
     resourceKind: current.page === "workload" ? (current as { kind: string }).kind :
                    current.page === "network" ? (current as { kind: string }).kind :
                     current.page === "storage" ? "PVC" :
+                   current.page === "custom" ? (current as { kind: string }).kind :
                     current.page === "config" ? (current as { kind: string }).kind : undefined,
-    resourceName: current.page === "workload" || current.page === "network" || current.page === "storage" || current.page === "config"
+    resourceName: current.page === "workload" || current.page === "network" || current.page === "storage" || current.page === "config" || current.page === "custom"
                   ? (current as { name: string }).name : undefined,
     podName: current.page === "pod" ? (current as { pod: PodDetail }).pod?.name : undefined,
     spinner: loading ? spinner : undefined,
@@ -467,6 +484,7 @@ export function App({ renderer }: AppProps) {
           onOpenNode={handleOpenNode}
           onOpenNamespace={handleOpenNamespace}
           onOpenResource={handleOpenResource}
+          onOpenCustomResource={handleOpenCustomResource}
           onBack={pop}
           onToggleMetric={handleToggleMetric}
           onQuit={handleQuit}
@@ -504,6 +522,7 @@ export function App({ renderer }: AppProps) {
           onOpenPod={handleOpenPod}
           onOpenNetwork={handleOpenNetwork}
           onOpenConfig={handleOpenConfig}
+          onOpenCustomResource={handleOpenCustomResource}
           onBack={pop}
           onQuit={handleQuit}
           onRefresh={handleRefreshNamespace}
@@ -593,6 +612,18 @@ export function App({ renderer }: AppProps) {
           onQuit={handleQuit}
           onRefresh={handleRefreshPodDetail}
           contextName={currentContext}
+        />
+      )}
+
+      {current.page === "custom" && (
+        <CustomResourcePage
+          kind={(current as { kind: string }).kind}
+          name={(current as { name: string }).name}
+          namespace={(current as { namespace: string }).namespace}
+          detail={customDetailData}
+          loading={customDetailLoading}
+          onBack={pop}
+          onQuit={handleQuit}
         />
       )}
     </box>

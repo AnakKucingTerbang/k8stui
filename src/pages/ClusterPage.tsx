@@ -102,6 +102,7 @@ interface ClusterDetailPageProps {
   onOpenNode: (node: NodeDetail) => void
   onOpenNamespace: (namespace: string) => void
   onOpenResource: (resource: ClusterResource) => void
+  onOpenCustomResource: (kind: string, name: string, namespace: string) => void
   onBack: () => void
   onToggleMetric: () => void
   onQuit: () => void
@@ -120,6 +121,7 @@ export function ClusterPage({
   onOpenNode,
   onOpenNamespace,
   onOpenResource,
+  onOpenCustomResource,
   onBack,
   onToggleMetric,
   onQuit,
@@ -328,7 +330,7 @@ export function ClusterPage({
         if (focus === "right") {
           if (leftMode === "custom") {
             const res = activeCustomResources[customResIndex]
-            if (res) onOpenResource({ kind: res.kind, name: res.name, namespace: res.namespace, category: "configuration" })
+            if (res) onOpenCustomResource(res.kind, res.name, res.namespace)
           } else if (activeView === "nodes") {
             const node = nodeDetails[nodeListIndex]
             if (node) onOpenNode(node)
@@ -346,7 +348,7 @@ export function ClusterPage({
         onQuit()
       }
     },
-    [focus, leftMode, leftIndex, activeView, nodeListIndex, nodeDetails.length, nsListIndex, namespaces.length, resourceListIndex, resources, customGroupIndex, customResIndex, visibleGroups, activeCustomResources, onOpenNode, onOpenNamespace, onOpenResource, onBack, onToggleMetric, onQuit, scrollIntoView],
+    [focus, leftMode, leftIndex, activeView, nodeListIndex, nodeDetails.length, nsListIndex, namespaces.length, resourceListIndex, resources, customGroupIndex, customResIndex, visibleGroups, activeCustomResources, onOpenNode, onOpenNamespace, onOpenResource, onOpenCustomResource, onBack, onToggleMetric, onQuit, scrollIntoView],
   )
 
   useKeyboard(handleKey)

@@ -1,6 +1,6 @@
-import type { ApiGroupInfo, ApiResourceKind, CustomGroup, NamespacedResource } from "../../types"
+import type { ApiGroupInfo, ApiResourceKind, CustomGroup, NamespacedResource, CustomResourceDetailData } from "../../types"
 import { kubectlContextAsync } from "./exec"
-import { BUILT_IN_API_GROUPS, parseNamespacedResources } from "./parse"
+import { BUILT_IN_API_GROUPS, parseNamespacedResources, buildGenericSummaryRows } from "./parse"
 
 async function concurrentPool<T, R>(
   items: T[],
@@ -163,4 +163,27 @@ function formatAgeFromDate(timestamp: string): string {
   if (months < 12) return `${months}mo`
   const years = Math.floor(days / 365)
   return `${years}y`
+}
+
+export async function fetchCustomResourceDetailAsync(
+  contextName: string,
+  namespace: string,
+  kind: string,
+  name: string,
+): Promise<CustomResourceDetailData> {
+  const kindFlag = kind.toLowerCase()
+  const [yamlOutput, jsonOutput] = await Promise.all([
+    kubectlContextAsync(contextName, `get ${kindFlag} ${name} -n ${namespace} -o yaml`, 10000),
+    kubectlContextAsync(contextName, `get ${kindFlag} ${name} -n ${namespace} -o json`, 10000),
+  ])
+
+  let summary: import("../../types").DetailRow[] = []
+  if (jsonOutput) {
+    try {
+      const obj = JSON.parse(jsonOutput)
+      summary = buildGenericSummaryRows(obj)
+    } catch {}
+  }
+
+  return { summary, yaml: yamlOutput || "" }
 }

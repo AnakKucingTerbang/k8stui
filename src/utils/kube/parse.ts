@@ -380,3 +380,62 @@ export function buildSummaryRows(kind: string, obj: any): DetailRow[] {
 
   return rows
 }
+
+export function buildGenericSummaryRows(obj: any): DetailRow[] {
+  const rows: DetailRow[] = []
+  const meta = obj.metadata || {}
+
+  rows.push({ key: "Kind", value: val(obj.kind || "") })
+  rows.push({ key: "Name", value: val(meta.name) })
+  rows.push({ key: "Namespace", value: val(meta.namespace) })
+
+  const labels = meta.labels || {}
+  const labelEntries = Object.entries(labels)
+  if (labelEntries.length === 0) {
+    rows.push({ key: "Labels", value: DASH })
+  } else {
+    rows.push({ key: "Labels", value: "", isParent: true })
+    for (const [k, v] of labelEntries) {
+      rows.push({ key: k, value: v as string, indent: true })
+    }
+  }
+
+  const annotations = meta.annotations || {}
+  const annotationEntries = Object.entries(annotations)
+  if (annotationEntries.length === 0) {
+    rows.push({ key: "Annotations", value: DASH })
+  } else {
+    rows.push({ key: "Annotations", value: "", isParent: true })
+    for (const [k, v] of annotationEntries) {
+      rows.push({ key: k, value: v as string, indent: true })
+    }
+  }
+
+  rows.push({ key: "Created", value: meta.creationTimestamp ? formatAge(meta.creationTimestamp) : DASH })
+
+  const ownerRefs: any[] = meta.ownerReferences || []
+  if (ownerRefs.length === 0) {
+    rows.push({ key: "Owners", value: DASH })
+  } else {
+    rows.push({ key: "Owners", value: "", isParent: true })
+    for (const ref of ownerRefs) {
+      rows.push({ key: `${ref.kind || ""}/${ref.name || ""}`, value: "", indent: true })
+    }
+  }
+
+  const finalizers: string[] = meta.finalizers || []
+  if (finalizers.length === 0) {
+    rows.push({ key: "Finalizers", value: DASH })
+  } else {
+    rows.push({ key: "Finalizers", value: "", isParent: true })
+    for (const f of finalizers) {
+      rows.push({ key: f, value: "", indent: true })
+    }
+  }
+
+  rows.push({ key: "Generation", value: `${meta.generation ?? DASH}` })
+  rows.push({ key: "Resource Ver", value: val(meta.resourceVersion) })
+  rows.push({ key: "UID", value: val(meta.uid) })
+
+  return rows
+}
