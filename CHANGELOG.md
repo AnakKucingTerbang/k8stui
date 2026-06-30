@@ -1,5 +1,13 @@
 # Changelog
 
+# [0.10.0](https://github.com/AnakKucingTerbang/k8stui/compare/v0.9.0...v0.10.0) (2026-06-30)
+
+
+### Features
+
+* **crd:** add custom resource detail page with YAML and metadata views ([ce9567a](https://github.com/AnakKucingTerbang/k8stui/commit/ce9567a08aaec75f08946ed4863fedd56b33c322))
+* **crd:** add custom resource discovery view ([6a2d9c1](https://github.com/AnakKucingTerbang/k8stui/commit/6a2d9c163faa19888d134ab2a368a9810544b0a7))
+
 # [0.9.0](https://github.com/AnakKucingTerbang/k8stui/compare/v0.8.0...v0.9.0) (2026-06-29)
 
 
