@@ -16,6 +16,7 @@ import type {
   Cluster, KubeContext, MetricMode, NodeDetail, NodeCondition,
   NamespaceInfo, ClusterResource, PodDetail, PodDetailFull,
   NamespacedResource, DetailRow, ResourceCategory,   SecretDetailData,
+  CustomGroup,
 } from "./types"
 import {
   loadContextsAsync,
@@ -32,6 +33,8 @@ import {
   fetchStorageDetailAsync,
   fetchConfigDetailAsync,
   fetchSecretDetailAsync,
+  fetchApiGroupsAsync,
+  fetchAllCustomResourcesAsync,
 } from "./utils/kube"
 
 type NavEntry =
@@ -106,6 +109,10 @@ export function App({ renderer }: AppProps) {
   const [podDetailFull, setPodDetailFull] = useState<PodDetailFull | null>(null)
   const [metricMode, setMetricMode] = useState<MetricMode>("pct")
 
+  const [customGroups, setCustomGroups] = useState<CustomGroup[]>([])
+  const [customResourceMap, setCustomResourceMap] = useState<Record<string, NamespacedResource[]>>({})
+  const [customLoading, setCustomLoading] = useState(false)
+
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const spinnerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
@@ -140,9 +147,19 @@ export function App({ renderer }: AppProps) {
     setStack([{ page: "clusters" }])
     switchContext(ctxName)
     setCurrentContext(ctxName)
+    setCustomGroups([])
+    setCustomResourceMap({})
+    setCustomLoading(true)
     const data = await fetchClusterStatusAsync(ctxName)
     setClusters([data])
     setLoading(false)
+    fetchApiGroupsAsync(ctxName).then((groups) => {
+      setCustomGroups(groups)
+      fetchAllCustomResourcesAsync(ctxName, groups).then((map) => {
+        setCustomResourceMap(map)
+        setCustomLoading(false)
+      })
+    })
   }, [])
 
   useEffect(() => {
@@ -155,6 +172,14 @@ export function App({ renderer }: AppProps) {
       if (cur) {
         const data = await fetchClusterStatusAsync(cur)
         setClusters([data])
+        setCustomLoading(true)
+        fetchApiGroupsAsync(cur).then((groups) => {
+          setCustomGroups(groups)
+          fetchAllCustomResourcesAsync(cur, groups).then((map) => {
+            setCustomResourceMap(map)
+            setCustomLoading(false)
+          })
+        })
       }
       setLoading(false)
     })()
@@ -436,6 +461,9 @@ export function App({ renderer }: AppProps) {
           resources={clusterResources}
           loading={detailLoading}
           metricMode={metricMode}
+          customGroups={customGroups}
+          customResourceMap={customResourceMap}
+          customLoading={customLoading}
           onOpenNode={handleOpenNode}
           onOpenNamespace={handleOpenNamespace}
           onOpenResource={handleOpenResource}
@@ -469,6 +497,9 @@ export function App({ renderer }: AppProps) {
           loading={nsLoading}
           metricMode={metricMode}
           contextName={currentContext}
+          customGroups={customGroups}
+          customResourceMap={customResourceMap}
+          customLoading={customLoading}
           onOpenWorkload={handleOpenWorkload}
           onOpenPod={handleOpenPod}
           onOpenNetwork={handleOpenNetwork}

@@ -175,6 +175,25 @@ export interface ClusterDetailData {
   resources: ClusterResource[]
 }
 
+export interface ApiGroupInfo {
+  name: string
+  preferredVersion: string
+  groupVersion: string
+}
+
+export interface ApiResourceKind {
+  name: string
+  kind: string
+  namespaced: boolean
+  shortNames: string[]
+  verbs: string[]
+}
+
+export interface CustomGroup {
+  apiGroup: ApiGroupInfo
+  kinds: ApiResourceKind[]
+}
+
 export interface EnvEntry {
   key: string
   value: string

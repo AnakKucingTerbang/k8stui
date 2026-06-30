@@ -261,6 +261,32 @@ export const KIND_CATEGORY: Record<string, ResourceCategory> = {
   Secret: "configuration",
 }
 
+export const BUILT_IN_API_GROUPS = new Set([
+  "",
+  "apps",
+  "batch",
+  "networking.k8s.io",
+  "storage.k8s.io",
+  "apiextensions.k8s.io",
+  "rbac.authorization.k8s.io",
+  "admissionregistration.k8s.io",
+  "apiextensions.k8s.io",
+  "apiregistration.k8s.io",
+  "authentication.k8s.io",
+  "authorization.k8s.io",
+  "autoscaling",
+  "coordination.k8s.io",
+  "events.k8s.io",
+  "flowcontrol.apiserver.k8s.io",
+  "metrics.k8s.io",
+  "node.k8s.io",
+  "policy",
+  "scheduling.k8s.io",
+  "certificates.k8s.io",
+  "discovery.k8s.io",
+  "gateway.networking.k8s.io",
+])
+
 export function classifyResource(kind: string): ResourceCategory {
   return KIND_CATEGORY[kind] || "configuration"
 }
