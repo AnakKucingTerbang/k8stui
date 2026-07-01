@@ -1,5 +1,17 @@
 # Changelog
 
+# [0.11.0](https://github.com/AnakKucingTerbang/k8stui/compare/v0.10.0...v0.11.0) (2026-07-01)
+
+
+### Bug Fixes
+
+* **rollout:** add 5s polling to WorkloadPage ([e2a89c3](https://github.com/AnakKucingTerbang/k8stui/commit/e2a89c30b8d5badfa54c6d3d38e5bc37a65b9f9b))
+
+
+### Features
+
+* **rollout:** add rollout restart for Deployments, DaemonSets, StatefulSets ([24fd7cc](https://github.com/AnakKucingTerbang/k8stui/commit/24fd7cc45028d69f2bc87d885b09b87571888841))
+
 # [0.10.0](https://github.com/AnakKucingTerbang/k8stui/compare/v0.9.0...v0.10.0) (2026-06-30)
 
 
