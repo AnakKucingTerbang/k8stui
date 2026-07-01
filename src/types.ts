@@ -231,6 +231,12 @@ export interface ComparisonResult {
   onlyInEnv: { key: string; envValue: string }[]
 }
 
+export interface RolloutPod {
+  name: string
+  node: string
+  status: string
+}
+
 export interface PortForwardEntry {
   localPort: number
   containerPort: number

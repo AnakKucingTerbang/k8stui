@@ -1,6 +1,45 @@
-import type { PodDetail, WorkloadDetailData, NetworkDetailData, StorageDetailData, ConfigDetailData, SecretDetailData } from "../../types"
+import type { PodDetail, RolloutPod, WorkloadDetailData, NetworkDetailData, StorageDetailData, ConfigDetailData, SecretDetailData } from "../../types"
 import { kubectlContextAsync } from "./exec"
 import { formatAge, parsePodStatus, buildSummaryRows, parseTopPods, findRefPods } from "./parse"
+
+export async function fetchRolloutPodsAsync(
+  contextName: string,
+  namespace: string,
+  kind: string,
+  name: string,
+): Promise<RolloutPod[]> {
+  const kindFlag = kind.toLowerCase()
+  const resourceJson = await kubectlContextAsync(
+    contextName,
+    `get ${kindFlag} ${name} -n ${namespace} -o json`,
+    5000,
+  )
+  if (!resourceJson) return []
+
+  let labelSelector = ""
+  try {
+    const obj = JSON.parse(resourceJson)
+    labelSelector = Object.entries(obj.spec?.selector?.matchLabels || {}).map(([k, v]) => `${k}=${v}`).join(",")
+  } catch { return [] }
+
+  if (!labelSelector) return []
+
+  const podsJson = await kubectlContextAsync(
+    contextName,
+    `get pods -n ${namespace} -l ${labelSelector} -o json`,
+    5000,
+  )
+  if (!podsJson) return []
+
+  try {
+    const data = JSON.parse(podsJson)
+    return (data.items || []).map((pod: any): RolloutPod => ({
+      name: pod.metadata?.name || "",
+      node: pod.spec?.nodeName || "──",
+      status: parsePodStatus(pod),
+    }))
+  } catch { return [] }
+}
 
 export async function fetchWorkloadDetailAsync(contextName: string, namespace: string, kind: string, name: string): Promise<WorkloadDetailData> {
   const kindFlag = kind.toLowerCase()

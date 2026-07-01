@@ -396,6 +396,19 @@ export function App({ renderer }: AppProps) {
     })
   }, [currentContext, push])
 
+  const handleRefreshWorkload = useCallback(() => {
+    const wlEntry = stack.find((e): e is NavEntry & { page: "workload" } => e.page === "workload")
+    if (!wlEntry || !currentContext) return
+    setWorkloadSummary([])
+    setWorkloadPods([])
+    setWorkloadLoading(true)
+    fetchWorkloadDetailAsync(currentContext, wlEntry.namespace, wlEntry.kind, wlEntry.name).then((data) => {
+      setWorkloadSummary(data.summary)
+      setWorkloadPods(data.pods)
+      setWorkloadLoading(false)
+    })
+  }, [currentContext, stack])
+
   const handleRefreshPodDetail = useCallback(() => {
     const podEntry = stack.find((e): e is NavEntry & { page: "pod" } => e.page === "pod")
     if (!podEntry || !currentContext) return
@@ -538,9 +551,11 @@ export function App({ renderer }: AppProps) {
           pods={workloadPods}
           loading={workloadLoading}
           metricMode={metricMode}
+          contextName={currentContext}
           onOpenPod={handleOpenPod}
           onBack={pop}
           onQuit={handleQuit}
+          onRefresh={handleRefreshWorkload}
         />
       )}
 

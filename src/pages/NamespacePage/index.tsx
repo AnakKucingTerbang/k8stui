@@ -7,8 +7,10 @@ import { CommandsBar, type CommandItem } from "../../components/CommandsBar"
 import { PodTable } from "../../components/PodTable"
 import { ResourceListTable } from "../../components/ResourceListTable"
 import { Toast } from "../../components/Toast"
+import { RolloutRestartModal } from "../../components/RolloutRestartModal"
 import { AddSecretModal } from "./AddSecretModal"
 import { DeleteSecretModal } from "./DeleteSecretModal"
+import { RESTARTABLE_KINDS } from "../../utils/kube"
 import type { PodDetail, NamespacedResource, MetricMode, CustomGroup } from "../../types"
 
 const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
@@ -96,6 +98,8 @@ export function NamespacePage({
   const [showDeleteSecretModal, setShowDeleteSecretModal] = useState(false)
   const [deleteSecretName, setDeleteSecretName] = useState("")
   const [toastMessage, setToastMessage] = useState("")
+  const [showRestartModal, setShowRestartModal] = useState(false)
+  const [restartTarget, setRestartTarget] = useState<{ kind: string; name: string; namespace: string } | null>(null)
   const spinnerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const renderer = useRenderer()
@@ -150,9 +154,15 @@ export function NamespacePage({
     onRefresh()
   }, [onRefresh])
 
+  const handleRestarted = useCallback(() => {
+    setShowRestartModal(false)
+    setRestartTarget(null)
+    onRefresh()
+  }, [onRefresh])
+
   const termWidth = renderer.width ?? 120
   const termHeight = renderer.height ?? 40
-  const modalActive = showAddSecretModal || showDeleteSecretModal
+  const modalActive = showAddSecretModal || showDeleteSecretModal || showRestartModal
 
   const activeView = LEFT_VIEWS[leftIndex]!
 
@@ -281,6 +291,12 @@ export function NamespacePage({
           setDeleteSecretName(res.name)
           setShowDeleteSecretModal(true)
         }
+      } else if (key.name === "r" && focus === "right" && leftMode === "views" && activeView === "workloads") {
+        const res = workloads[wlIndex]
+        if (res && RESTARTABLE_KINDS.has(res.kind)) {
+          setRestartTarget({ kind: res.kind, name: res.name, namespace: res.namespace })
+          setShowRestartModal(true)
+        }
       } else if (key.name === "q") {
         onQuit()
       }
@@ -312,6 +328,12 @@ export function NamespacePage({
         const selected = config[cfgIndex]
         if (selected && selected.kind === "Secret") {
           baseCommands.push({ key: "[d]", label: "delete secret" })
+        }
+      }
+      if (leftMode === "views" && activeView === "workloads") {
+        const selected = workloads[wlIndex]
+        if (selected && RESTARTABLE_KINDS.has(selected.kind)) {
+          baseCommands.push({ key: "[r]", label: "estart" })
         }
       }
       baseCommands.push({ key: "[esc]", label: "back" })
@@ -446,6 +468,21 @@ export function NamespacePage({
           spinner={spinner}
           onClose={() => { setShowDeleteSecretModal(false); setDeleteSecretName("") }}
           onDeleted={handleDeleteSecretCreated}
+          onToast={toast}
+        />
+      )}
+
+      {showRestartModal && restartTarget && (
+        <RolloutRestartModal
+          kind={restartTarget.kind}
+          name={restartTarget.name}
+          namespace={restartTarget.namespace}
+          contextName={contextName}
+          termWidth={termWidth}
+          termHeight={termHeight}
+          spinner={spinner}
+          onClose={() => { setShowRestartModal(false); setRestartTarget(null) }}
+          onRestarted={handleRestarted}
           onToast={toast}
         />
       )}

@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { useKeyboard } from "@opentui/react"
+import { useKeyboard, useRenderer } from "@opentui/react"
 import { t, fg } from "@opentui/core"
 import { Section } from "../components/Section"
 import { Panel } from "../components/Panel"
 import { CommandsBar, type CommandItem } from "../components/CommandsBar"
 import { PodTable } from "../components/PodTable"
+import { RolloutRestartModal } from "../components/RolloutRestartModal"
+import { Toast } from "../components/Toast"
+import { RESTARTABLE_KINDS } from "../utils/kube"
 import type { PodDetail, DetailRow, MetricMode } from "../types"
 
 const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
@@ -29,9 +32,11 @@ interface WorkloadPageProps {
   pods: PodDetail[]
   loading: boolean
   metricMode: MetricMode
+  contextName: string
   onOpenPod: (pod: PodDetail) => void
   onBack: () => void
   onQuit: () => void
+  onRefresh: () => void
 }
 
 export function WorkloadPage({
@@ -42,15 +47,34 @@ export function WorkloadPage({
   pods,
   loading,
   metricMode,
+  contextName,
   onOpenPod,
   onBack,
   onQuit,
+  onRefresh,
 }: WorkloadPageProps) {
   const [podIndex, setPodIndex] = useState(0)
   const [spinnerFrame, setSpinnerFrame] = useState(0)
+  const [showRestartModal, setShowRestartModal] = useState(false)
+  const [toastMessage, setToastMessage] = useState("")
   const spinnerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const podScrollRef = useRef<any>(null)
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const renderer = useRenderer()
   const spinner = SPINNER_FRAMES[spinnerFrame % SPINNER_FRAMES.length] ?? "⠋"
+
+  const canRestart = RESTARTABLE_KINDS.has(kind)
+
+  const toast = useCallback((msg: string) => {
+    setToastMessage(msg)
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current)
+    toastTimerRef.current = setTimeout(() => setToastMessage(""), 5000)
+  }, [])
+
+  const handleRestarted = useCallback(() => {
+    setShowRestartModal(false)
+    onRefresh()
+  }, [onRefresh])
 
   useEffect(() => {
     if (!loading) {
@@ -71,6 +95,8 @@ export function WorkloadPage({
 
   const handleKey = useCallback(
     (key: { name: string }) => {
+      if (showRestartModal) return
+
       if (key.name === "escape") {
         onBack()
       } else if (key.name === "up") {
@@ -88,20 +114,26 @@ export function WorkloadPage({
       } else if (key.name === "return") {
         const pod = pods[podIndex]
         if (pod) onOpenPod(pod)
+      } else if (key.name === "r" && canRestart) {
+        setShowRestartModal(true)
       } else if (key.name === "q") {
         onQuit()
       }
     },
-    [podIndex, pods, onOpenPod, onBack, onQuit, scrollIntoView],
+    [podIndex, pods, onOpenPod, onBack, onQuit, scrollIntoView, canRestart, showRestartModal],
   )
 
   useKeyboard(handleKey)
 
-  const commands = useMemo<CommandItem[]>(() => [
-    { key: "[enter]", label: "pod" },
-    { key: "[esc]", label: "back" },
-    { key: "[q]", label: "uit" },
-  ], [])
+  const commands = useMemo<CommandItem[]>(() => {
+    const base: CommandItem[] = [
+      { key: "[enter]", label: "pod" },
+    ]
+    if (canRestart) base.push({ key: "[r]", label: "estart" })
+    base.push({ key: "[esc]", label: "back" })
+    base.push({ key: "[q]", label: "uit" })
+    return base
+  }, [canRestart])
 
   return (
     <>
@@ -135,6 +167,23 @@ export function WorkloadPage({
       </Panel>
 
       <CommandsBar commands={commands} />
+
+      {showRestartModal && (
+        <RolloutRestartModal
+          kind={kind}
+          name={name}
+          namespace={namespace}
+          contextName={contextName}
+          termWidth={renderer.width ?? 120}
+          termHeight={renderer.height ?? 40}
+          spinner={spinner}
+          onClose={() => setShowRestartModal(false)}
+          onRestarted={handleRestarted}
+          onToast={toast}
+        />
+      )}
+
+      <Toast message={toastMessage} />
     </>
   )
 }

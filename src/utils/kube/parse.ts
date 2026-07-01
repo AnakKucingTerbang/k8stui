@@ -2,6 +2,8 @@ import type { DetailRow, ResourceCategory, PodDetail, NamespacedResource, NodeCo
 
 export const DASH = "──"
 
+export const RESTARTABLE_KINDS = new Set(["Deployment", "DaemonSet", "StatefulSet"])
+
 export function val(s: string): string {
   return s || DASH
 }
@@ -22,6 +24,7 @@ export function formatAge(ts: string): string {
 }
 
 export function parsePodStatus(pod: any): string {
+  if (pod.metadata?.deletionTimestamp) return "Terminating"
   const phase = pod.status?.phase || "Unknown"
   if (phase !== "Running" && phase !== "Pending") return phase
   const containerStatuses = pod.status?.containerStatuses || []

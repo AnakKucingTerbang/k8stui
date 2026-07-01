@@ -53,3 +53,26 @@ export function kubectlApplyYamlAsync(
     child.stdin.end()
   })
 }
+
+export function rolloutRestartAsync(
+  context: string,
+  kind: string,
+  name: string,
+  namespace: string,
+  timeout = 15000,
+): Promise<{ success: boolean; output: string }> {
+  return new Promise((resolve) => {
+    const kindFlag = kind.toLowerCase()
+    exec(
+      `kubectl --context=${context} rollout restart ${kindFlag} ${name} -n ${namespace}`,
+      { encoding: "utf8", timeout },
+      (err, stdout, stderr) => {
+        if (err) {
+          resolve({ success: false, output: (stderr || err.message || "unknown error").trim() })
+        } else {
+          resolve({ success: true, output: stdout.trim() })
+        }
+      },
+    )
+  })
+}
