@@ -37,6 +37,7 @@ interface WorkloadPageProps {
   onBack: () => void
   onQuit: () => void
   onRefresh: () => void
+  onModalChange: (open: boolean) => void
 }
 
 export function WorkloadPage({
@@ -52,6 +53,7 @@ export function WorkloadPage({
   onBack,
   onQuit,
   onRefresh,
+  onModalChange,
 }: WorkloadPageProps) {
   const [podIndex, setPodIndex] = useState(0)
   const [spinnerFrame, setSpinnerFrame] = useState(0)
@@ -84,6 +86,10 @@ export function WorkloadPage({
     spinnerRef.current = setInterval(() => setSpinnerFrame((f: number) => f + 1), 80)
     return () => { if (spinnerRef.current) { clearInterval(spinnerRef.current); spinnerRef.current = null } }
   }, [loading])
+
+  useEffect(() => {
+    onModalChange(showRestartModal)
+  }, [showRestartModal, onModalChange])
 
   useEffect(() => {
     setPodIndex(0)

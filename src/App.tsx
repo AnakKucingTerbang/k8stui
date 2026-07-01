@@ -119,8 +119,12 @@ export function App({ renderer }: AppProps) {
   const [customDetailData, setCustomDetailData] = useState<CustomResourceDetailData | null>(null)
   const [customDetailLoading, setCustomDetailLoading] = useState(false)
 
+  const [workloadModalOpen, setWorkloadModalOpen] = useState(false)
+
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const spinnerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const workloadPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const workloadPollInFlightRef = useRef(false)
 
   const spinner = SPINNER_FRAMES[spinnerFrame % SPINNER_FRAMES.length] ?? "⠋"
 
@@ -142,6 +146,29 @@ export function App({ renderer }: AppProps) {
   }, [])
 
   const current = stack[stack.length - 1]!
+
+  useEffect(() => {
+    if (workloadPollRef.current) { clearInterval(workloadPollRef.current); workloadPollRef.current = null }
+
+    if (current.page !== "workload" || workloadModalOpen) return
+
+    workloadPollRef.current = setInterval(() => {
+      if (workloadPollInFlightRef.current) return
+      const wlEntry = stack.find((e): e is NavEntry & { page: "workload" } => e.page === "workload")
+      if (!wlEntry || !currentContext) return
+      workloadPollInFlightRef.current = true
+      fetchWorkloadDetailAsync(currentContext, wlEntry.namespace, wlEntry.kind, wlEntry.name)
+        .then((data) => {
+          setWorkloadSummary(data.summary)
+          setWorkloadPods(data.pods)
+        })
+        .finally(() => { workloadPollInFlightRef.current = false })
+    }, 5000)
+
+    return () => {
+      if (workloadPollRef.current) { clearInterval(workloadPollRef.current); workloadPollRef.current = null }
+    }
+  }, [current.page, workloadModalOpen, currentContext, stack])
 
   const refreshCluster = useCallback(async () => {
     const data = await fetchClusterStatusAsync(currentContext)
@@ -386,6 +413,10 @@ export function App({ renderer }: AppProps) {
     }
   }, [currentContext, push])
 
+  const handleWorkloadModalChange = useCallback((open: boolean) => {
+    setWorkloadModalOpen(open)
+  }, [])
+
   const handleOpenPod = useCallback((pod: PodDetail) => {
     setPodDetailFull(null)
     push({ page: "pod", pod })
@@ -556,6 +587,7 @@ export function App({ renderer }: AppProps) {
           onBack={pop}
           onQuit={handleQuit}
           onRefresh={handleRefreshWorkload}
+          onModalChange={handleWorkloadModalChange}
         />
       )}
 
