@@ -1,5 +1,12 @@
 # Changelog
 
+# [0.12.0](https://github.com/AnakKucingTerbang/k8stui/compare/v0.11.0...v0.12.0) (2026-07-02)
+
+
+### Features
+
+* **clipboard:** copy selection to clipboard on mouse release ([f30d0ae](https://github.com/AnakKucingTerbang/k8stui/commit/f30d0ae4d2a3cbd2bd05ee75b0997e93835860b0))
+
 # [0.11.0](https://github.com/AnakKucingTerbang/k8stui/compare/v0.10.0...v0.11.0) (2026-07-01)
 
 
