@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { useRenderer } from "@opentui/react"
-import type { CliRenderer } from "@opentui/core"
+import type { CliRenderer, Selection } from "@opentui/core"
 import { HeaderBar, buildBreadcrumbParts } from "./components/HeaderBar"
 import { ClustersPage } from "./pages/ClustersPage"
 import { ClusterPage } from "./pages/ClusterPage"
@@ -13,6 +13,7 @@ import { ConfigPage } from "./pages/ConfigPage"
 import { SecretPage } from "./pages/SecretPage"
 import { CustomResourcePage } from "./pages/CustomResourcePage"
 import { PodPage } from "./pages/PodPage/index"
+import { Toast } from "./components/Toast"
 import type {
   Cluster, KubeContext, MetricMode, NodeDetail, NodeCondition,
   NamespaceInfo, ClusterResource, PodDetail, PodDetailFull,
@@ -120,6 +121,15 @@ export function App({ renderer }: AppProps) {
   const [customDetailLoading, setCustomDetailLoading] = useState(false)
 
   const [workloadModalOpen, setWorkloadModalOpen] = useState(false)
+
+  const [toastMessage, setToastMessage] = useState("")
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const toast = useCallback((msg: string) => {
+    setToastMessage(msg)
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current)
+    toastTimerRef.current = setTimeout(() => setToastMessage(""), 3000)
+  }, [])
 
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const spinnerRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -230,6 +240,17 @@ export function App({ renderer }: AppProps) {
     const clockInterval = setInterval(() => setClock(formatTime(new Date())), 2000)
     return () => { clearInterval(clockInterval); renderer.dropLive() }
   }, [renderer])
+
+  useEffect(() => {
+    const handler = (selection: Selection) => {
+      const text = selection.getSelectedText()
+      if (!text) return
+      renderer.copyToClipboardOSC52(text)
+      toast("copied to clipboard")
+    }
+    renderer.on("selection", handler)
+    return () => { renderer.off("selection", handler) }
+  }, [renderer, toast])
 
   const handleOpenCluster = useCallback((cluster: Cluster) => {
     setNodeDetails([])
@@ -498,6 +519,8 @@ export function App({ renderer }: AppProps) {
   return (
     <box style={{ flexDirection: "column", width: "100%", height: "100%", gap: 0 }}>
       <HeaderBar content={breadcrumb} clock={clock} />
+
+      <Toast message={toastMessage} />
 
       {current.page === "clusters" && (
         <ClustersPage
