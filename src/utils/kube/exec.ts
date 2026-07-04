@@ -76,3 +76,25 @@ export function rolloutRestartAsync(
     )
   })
 }
+
+export function triggerCronJobAsync(
+  context: string,
+  name: string,
+  namespace: string,
+  jobName: string,
+  timeout = 15000,
+): Promise<{ success: boolean; output: string }> {
+  return new Promise((resolve) => {
+    exec(
+      `kubectl --context=${context} create job ${jobName} --from=cronjob/${name} -n ${namespace}`,
+      { encoding: "utf8", timeout },
+      (err, stdout, stderr) => {
+        if (err) {
+          resolve({ success: false, output: (stderr || err.message || "unknown error").trim() })
+        } else {
+          resolve({ success: true, output: stdout.trim() })
+        }
+      },
+    )
+  })
+}

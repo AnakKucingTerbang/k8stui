@@ -1,5 +1,5 @@
-export { getCurrentContext, switchContext, kubectlAsync, kubectlContextAsync, kubectlSync, rolloutRestartAsync } from "./exec"
-export { formatAge, parsePodStatus, parseProbe, parseNodesJson, parseTopNodes, parseCpuMillicores, parseMemBytes, formatCpuRaw, formatMemRaw, parseNamespacedResources, parseTopPods, parsePodsFromJson, findRefPods, buildSummaryRows, buildGenericSummaryRows, classifyResource, DASH, val, KIND_CATEGORY, BUILT_IN_API_GROUPS, RESTARTABLE_KINDS } from "./parse"
+export { getCurrentContext, switchContext, kubectlAsync, kubectlContextAsync, kubectlSync, rolloutRestartAsync, triggerCronJobAsync } from "./exec"
+export { formatAge, parsePodStatus, parseProbe, parseNodesJson, parseTopNodes, parseCpuMillicores, parseMemBytes, formatCpuRaw, formatMemRaw, parseNamespacedResources, parseTopPods, parsePodsFromJson, findRefPods, buildSummaryRows, buildGenericSummaryRows, classifyResource, DASH, val, KIND_CATEGORY, BUILT_IN_API_GROUPS, RESTARTABLE_KINDS, TRIGGERABLE_KINDS } from "./parse"
 export { loadContextsAsync, fetchClusterStatusAsync, fetchClusterResourcesAsync, fetchNamespacesAsync, fetchClusterDetailDataAsync } from "./cluster"
 export { fetchNodeDetailsAsync, fetchPodsForNodeAsync, fetchNodeConditionsAsync } from "./node"
 export { fetchPodDetailAsync, fetchApplicationResourcesAsync, applyYamlAsync } from "./pod"

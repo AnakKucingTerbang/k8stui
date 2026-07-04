@@ -3,6 +3,7 @@ import type { DetailRow, ResourceCategory, PodDetail, NamespacedResource, NodeCo
 export const DASH = "──"
 
 export const RESTARTABLE_KINDS = new Set(["Deployment", "DaemonSet", "StatefulSet"])
+export const TRIGGERABLE_KINDS = new Set(["CronJob"])
 
 export function val(s: string): string {
   return s || DASH

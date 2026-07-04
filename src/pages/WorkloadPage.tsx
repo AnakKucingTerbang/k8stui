@@ -6,8 +6,9 @@ import { Panel } from "../components/Panel"
 import { CommandsBar, type CommandItem } from "../components/CommandsBar"
 import { PodTable } from "../components/PodTable"
 import { RolloutRestartModal } from "../components/RolloutRestartModal"
+import { CronJobTriggerModal } from "../components/CronJobTriggerModal"
 import { Toast } from "../components/Toast"
-import { RESTARTABLE_KINDS } from "../utils/kube"
+import { RESTARTABLE_KINDS, TRIGGERABLE_KINDS } from "../utils/kube"
 import type { PodDetail, DetailRow, MetricMode } from "../types"
 
 const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
@@ -58,6 +59,7 @@ export function WorkloadPage({
   const [podIndex, setPodIndex] = useState(0)
   const [spinnerFrame, setSpinnerFrame] = useState(0)
   const [showRestartModal, setShowRestartModal] = useState(false)
+  const [showTriggerModal, setShowTriggerModal] = useState(false)
   const [toastMessage, setToastMessage] = useState("")
   const spinnerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const podScrollRef = useRef<any>(null)
@@ -66,6 +68,7 @@ export function WorkloadPage({
   const spinner = SPINNER_FRAMES[spinnerFrame % SPINNER_FRAMES.length] ?? "⠋"
 
   const canRestart = RESTARTABLE_KINDS.has(kind)
+  const canTrigger = TRIGGERABLE_KINDS.has(kind)
 
   const toast = useCallback((msg: string) => {
     setToastMessage(msg)
@@ -88,8 +91,8 @@ export function WorkloadPage({
   }, [loading])
 
   useEffect(() => {
-    onModalChange(showRestartModal)
-  }, [showRestartModal, onModalChange])
+    onModalChange(showRestartModal || showTriggerModal)
+  }, [showRestartModal, showTriggerModal, onModalChange])
 
   useEffect(() => {
     setPodIndex(0)
@@ -101,7 +104,7 @@ export function WorkloadPage({
 
   const handleKey = useCallback(
     (key: { name: string }) => {
-      if (showRestartModal) return
+      if (showRestartModal || showTriggerModal) return
 
       if (key.name === "escape") {
         onBack()
@@ -122,11 +125,13 @@ export function WorkloadPage({
         if (pod) onOpenPod(pod)
       } else if (key.name === "r" && canRestart) {
         setShowRestartModal(true)
+      } else if (key.name === "t" && canTrigger) {
+        setShowTriggerModal(true)
       } else if (key.name === "q") {
         onQuit()
       }
     },
-    [podIndex, pods, onOpenPod, onBack, onQuit, scrollIntoView, canRestart, showRestartModal],
+    [podIndex, pods, onOpenPod, onBack, onQuit, scrollIntoView, canRestart, canTrigger, showRestartModal, showTriggerModal],
   )
 
   useKeyboard(handleKey)
@@ -136,10 +141,11 @@ export function WorkloadPage({
       { key: "[enter]", label: "pod" },
     ]
     if (canRestart) base.push({ key: "[r]", label: "estart" })
+    if (canTrigger) base.push({ key: "[t]", label: "rigger" })
     base.push({ key: "[esc]", label: "back" })
     base.push({ key: "[q]", label: "uit" })
     return base
-  }, [canRestart])
+  }, [canRestart, canTrigger])
 
   return (
     <>
@@ -185,6 +191,19 @@ export function WorkloadPage({
           spinner={spinner}
           onClose={() => setShowRestartModal(false)}
           onRestarted={handleRestarted}
+          onToast={toast}
+        />
+      )}
+
+      {showTriggerModal && (
+        <CronJobTriggerModal
+          name={name}
+          namespace={namespace}
+          contextName={contextName}
+          termWidth={renderer.width ?? 120}
+          termHeight={renderer.height ?? 40}
+          spinner={spinner}
+          onClose={() => setShowTriggerModal(false)}
           onToast={toast}
         />
       )}
