@@ -1,5 +1,12 @@
 # Changelog
 
+# [0.13.0](https://github.com/AnakKucingTerbang/k8stui/compare/v0.12.0...v0.13.0) (2026-07-04)
+
+
+### Features
+
+* **workload:** trigger CronJob manual job ([5cf458a](https://github.com/AnakKucingTerbang/k8stui/commit/5cf458afda534a1096ca224ec784805cd95bad45))
+
 # [0.12.0](https://github.com/AnakKucingTerbang/k8stui/compare/v0.11.0...v0.12.0) (2026-07-02)
 
 
