@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { useKeyboard } from "@opentui/react"
-import { type KeyEvent, t, fg } from "@opentui/core"
+import { useKeyboard, usePaste } from "@opentui/react"
+import { type KeyEvent, decodePasteBytes, t, fg } from "@opentui/core"
 import { Modal } from "../../components/Modal"
 import { CommandsBar, type CommandItem } from "../../components/CommandsBar"
 import { syncSecretFromEnv } from "../../utils/secret-sync"
@@ -122,7 +122,7 @@ export function EnvEditorModal({
           setEditValue((v) => v.slice(0, -1))
         } else if (key.name === "delete") {
           setEditValue("")
-        } else if (isPrintable(key.name)) {
+        } else if (!key.ctrl && isPrintable(key.name)) {
           setEditValue((v) => v + keyCharSequence(key))
         }
         return
@@ -138,7 +138,7 @@ export function EnvEditorModal({
           setEditMode("idle")
         } else if (key.name === "backspace") {
           setAddKey((v) => v.slice(0, -1))
-        } else if (isPrintable(key.name)) {
+        } else if (!key.ctrl && isPrintable(key.name)) {
           setAddKey((v) => v + keyCharSequence(key))
         }
         return
@@ -161,7 +161,7 @@ export function EnvEditorModal({
           setEditMode("idle")
         } else if (key.name === "backspace") {
           setAddValue((v) => v.slice(0, -1))
-        } else if (isPrintable(key.name)) {
+        } else if (!key.ctrl && isPrintable(key.name)) {
           setAddValue((v) => v + keyCharSequence(key))
         }
         return
@@ -215,6 +215,28 @@ export function EnvEditorModal({
 
   useKeyboard(handleKey)
 
+  usePaste((event) => {
+    const text = decodePasteBytes(event.bytes)
+
+    if (editMode === "editValue") {
+      setEditValue((v) => {
+        let newVal = v + text
+        const trimmed = newVal.replace(/\r\n$/, "").replace(/\n$/, "").replace(/\r$/, "")
+        return trimmed
+      })
+      setDirty(true)
+    } else if (editMode === "addValue") {
+      setAddValue((v) => {
+        let newVal = v + text
+        const trimmed = newVal.replace(/\r\n$/, "").replace(/\n$/, "").replace(/\r$/, "")
+        return trimmed
+      })
+    } else if (editMode === "addKey") {
+      const withoutNewlines = text.replace(/[\r\n]/g, "")
+      setAddKey((v) => v + withoutNewlines)
+    }
+  })
+
 const commands = useMemo<CommandItem[]>(() => {
     if (editMode === "saving") {
       return [{ key: spinner, label: "Saving...", keyColor: "#D29922" }]
@@ -230,12 +252,14 @@ const commands = useMemo<CommandItem[]>(() => {
         { key: "[enter]", label: "confirm" },
         { key: "[esc]", label: "cancel" },
         { key: "[backspace]", label: "delete char" },
+        { key: "", label: "⎘ [paste]", keyColor: "#8B949E" },
       ]
     }
     if (editMode === "addKey") {
       return [
         { key: "[enter]", label: "next" },
         { key: "[esc]", label: "cancel" },
+        { key: "", label: "⎘ [paste]", keyColor: "#8B949E" },
         { key: "", label: "— key name", keyColor: "#8B949E" },
       ]
     }
@@ -243,6 +267,7 @@ const commands = useMemo<CommandItem[]>(() => {
       return [
         { key: "[enter]", label: "confirm" },
         { key: "[esc]", label: "cancel" },
+        { key: "", label: "⎘ [paste]", keyColor: "#8B949E" },
         { key: "", label: "— value", keyColor: "#8B949E" },
       ]
     }
