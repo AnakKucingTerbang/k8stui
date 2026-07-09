@@ -1,5 +1,17 @@
 # Changelog
 
+# [0.14.0](https://github.com/AnakKucingTerbang/k8stui/compare/v0.13.0...v0.14.0) (2026-07-09)
+
+
+### Bug Fixes
+
+* **env-editor:** support capital letters and symbols in .env input ([9e38bea](https://github.com/AnakKucingTerbang/k8stui/commit/9e38bea7cb62c5242db83c27be52087f273457d1))
+
+
+### Features
+
+* **env-editor:** add file-like paste via terminal bracketed paste ([f21bb9a](https://github.com/AnakKucingTerbang/k8stui/commit/f21bb9ad67da5160ef28eaa1729bc8d36b107480))
+
 # [0.13.0](https://github.com/AnakKucingTerbang/k8stui/compare/v0.12.0...v0.13.0) (2026-07-04)
 
 
