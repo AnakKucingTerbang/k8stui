@@ -1,5 +1,12 @@
 # Changelog
 
+# [0.15.0](https://github.com/AnakKucingTerbang/k8stui/compare/v0.14.0...v0.15.0) (2026-07-09)
+
+
+### Features
+
+* **pages:** add [x] delete key and refresh on save ([4526c8e](https://github.com/AnakKucingTerbang/k8stui/commit/4526c8ecefb5ec6e092da6c9ac4dfe363b1fe3b1))
+
 # [0.14.0](https://github.com/AnakKucingTerbang/k8stui/compare/v0.13.0...v0.14.0) (2026-07-09)
 
 
