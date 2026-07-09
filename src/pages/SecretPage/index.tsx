@@ -10,9 +10,12 @@ import { KeysView, decodeBase64, isBinary } from "./KeysView"
 import { RefsView } from "./RefsView"
 import { ManageView, type ManageViewHandle } from "./ManageView"
 import { RegisterModal } from "./RegisterModal"
-import { EnvEditorModal } from "./EnvEditorModal"
+import { EnvEntryEditorModal } from "./EnvEntryEditorModal"
+import { DeleteKeyModal } from "./DeleteKeyModal"
 import { LEFT_VIEWS, type LeftView, type Focus } from "./types"
+import { saveEnvEntry, deleteEnvEntry } from "../../utils/secret-sync"
 import type { PodDetail, DetailRow, SecretManagement, EnvEntry } from "../../types"
+import { getSecretManagement } from "../../utils/secret-registry"
 
 const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
 
@@ -58,9 +61,13 @@ export function SecretPage({
   const [toastMessage, setToastMessage] = useState("")
   const [manageCommands, setManageCommands] = useState<CommandItem[] | null>(null)
   const [showRegisterModal, setShowRegisterModal] = useState(false)
-  const [showEditorModal, setShowEditorModal] = useState(false)
-  const [editorEntries, setEditorEntries] = useState<EnvEntry[]>([])
-  const [editorManagement, setEditorManagement] = useState<SecretManagement | null>(null)
+  const [showEntryEditor, setShowEntryEditor] = useState(false)
+  const [entryMode, setEntryMode] = useState<"add" | "edit">("add")
+  const [entryInitialKey, setEntryInitialKey] = useState("")
+  const [entryInitialValue, setEntryInitialValue] = useState("")
+  const [entryOriginalKey, setEntryOriginalKey] = useState("")
+  const [showDeleteKeyModal, setShowDeleteKeyModal] = useState(false)
+  const [deleteKeyTarget, setDeleteKeyTarget] = useState("")
   const spinnerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const rightScrollRef = useRef<any>(null)
@@ -70,19 +77,11 @@ export function SecretPage({
   const spinner = SPINNER_FRAMES[spinnerFrame % SPINNER_FRAMES.length] ?? "⠋"
   const termWidth = renderer.width ?? 120
   const termHeight = renderer.height ?? 40
-  const modalActive = showRegisterModal || showEditorModal
-
   const management = useMemo<SecretManagement | null>(
-    () => {
-      if (!annotations["k8cli.dev/managed-by"]) return null
-      return {
-        strategy: annotations["k8cli.dev/managed-by"] as any,
-        host: annotations["k8cli.dev/env-host"] || "",
-        path: annotations["k8cli.dev/env-path"] || "",
-      }
-    },
+    () => getSecretManagement(annotations),
     [annotations],
   )
+  const modalActive = showRegisterModal || showEntryEditor || showDeleteKeyModal
 
   useEffect(() => {
     const spinning = loading
@@ -102,7 +101,7 @@ export function SecretPage({
     setKeyIndex(0)
     setPodIndex(0)
     setShowRegisterModal(false)
-    setShowEditorModal(false)
+    setShowEntryEditor(false)
   }, [name, namespace, management])
 
   const scrollIntoView = useCallback((scrollRef: React.RefObject<any>, id: string) => {
@@ -119,10 +118,68 @@ export function SecretPage({
     setShowRegisterModal(true)
   }, [])
 
-  const handleShowEditorModal = useCallback((entries: EnvEntry[], mgmt: SecretManagement) => {
-    setEditorEntries(entries)
-    setEditorManagement(mgmt)
-    setShowEditorModal(true)
+const handleAddEntry = useCallback(() => {
+    if (!management || management.strategy !== "dotenv") return
+    setEntryMode("add")
+    setEntryInitialKey("")
+    setEntryInitialValue("")
+    setEntryOriginalKey("")
+    setShowEntryEditor(true)
+  }, [management])
+
+  const handleEditEntry = useCallback(() => {
+    if (!management || management.strategy !== "dotenv") return
+    const selectedKey = dataKeys[keyIndex]
+    if (!selectedKey) return
+    const raw = rawData[selectedKey]
+    const decoded = raw ? decodeBase64(raw) : ""
+    const value = isBinary(decoded) ? "<binary>" : decoded
+    setEntryMode("edit")
+    setEntryInitialKey(selectedKey)
+    setEntryInitialValue(value)
+    setEntryOriginalKey(selectedKey)
+    setShowEntryEditor(true)
+  }, [management, dataKeys, keyIndex, rawData])
+
+  const handleEntryConfirm = useCallback(
+    async (key: string, value: string): Promise<{ success: boolean; output: string }> => {
+      if (!management) return { success: false, output: "Management not configured" }
+      const result = await saveEnvEntry(management, contextName, namespace, name, entryMode, key, value, entryOriginalKey)
+      if (result.success) {
+        onRefresh()
+      }
+      return result
+    },
+    [management, contextName, namespace, name, entryMode, entryOriginalKey, onRefresh],
+  )
+
+  const handleEntryCancel = useCallback(() => {
+    setShowEntryEditor(false)
+  }, [])
+
+  const handleDeleteEntry = useCallback(() => {
+    if (!management || management.strategy !== "dotenv") return
+    const selectedKey = dataKeys[keyIndex]
+    if (!selectedKey) return
+    setDeleteKeyTarget(selectedKey)
+    setShowDeleteKeyModal(true)
+  }, [management, dataKeys, keyIndex])
+
+  const handleDeleteConfirm = useCallback(
+    async (): Promise<{ success: boolean; output: string }> => {
+      if (!management) return { success: false, output: "Management not configured" }
+      const result = await deleteEnvEntry(management, contextName, namespace, name, deleteKeyTarget)
+      if (result.success) {
+        onRefresh()
+      }
+      return result
+    },
+    [management, contextName, namespace, name, deleteKeyTarget, onRefresh],
+  )
+
+  const handleDeleteCancel = useCallback(() => {
+    setShowDeleteKeyModal(false)
+    setDeleteKeyTarget("")
   }, [])
 
   const activeView = LEFT_VIEWS[leftIndex]!
@@ -200,6 +257,12 @@ export function SecretPage({
             setDecodedValues(decoded)
           }
           setRevealed((v) => !v)
+        } else if (key.name === "a" && management?.strategy === "dotenv") {
+          handleAddEntry()
+        } else if (key.name === "e" && management?.strategy === "dotenv") {
+          handleEditEntry()
+        } else if (key.name === "x" && management?.strategy === "dotenv") {
+          handleDeleteEntry()
         }
       } else if (activeView === "refs") {
         if (key.name === "up") {
@@ -246,14 +309,19 @@ export function SecretPage({
       return manageCommands
     }
     if (focus === "right" && activeView === "keys") {
-      return [
-        { key: "[d]", label: revealed ? "mask" : "reveal" },
-        { key: "[↑↓]", label: "nav" },
-        { key: "[enter]", label: "copy" },
-        { key: "[←]", label: "focus left" },
-        { key: "[esc]", label: "back" },
-        { key: "[q]", label: "uit" },
-      ]
+      const cmds: CommandItem[] = []
+if (management?.strategy === "dotenv") {
+          cmds.push({ key: "[a]", label: "add" })
+          cmds.push({ key: "[e]", label: "edit" })
+          cmds.push({ key: "[x]", label: "delete" })
+        }
+      cmds.push({ key: "[d]", label: revealed ? "mask" : "reveal" })
+      cmds.push({ key: "[↑↓]", label: "nav" })
+      cmds.push({ key: "[enter]", label: "copy" })
+      cmds.push({ key: "[←]", label: "focus left" })
+      cmds.push({ key: "[esc]", label: "back" })
+      cmds.push({ key: "[q]", label: "uit" })
+      return cmds
     }
     if (focus === "right" && activeView === "refs" && pods.length > 0) {
       return [
@@ -335,7 +403,6 @@ export function SecretPage({
           onCommands={setManageCommands}
           onToast={toast}
           onShowRegisterModal={handleShowRegisterModal}
-          onShowEditorModal={handleShowEditorModal}
         />
       )
     }
@@ -381,17 +448,27 @@ export function SecretPage({
         />
       )}
 
-      {showEditorModal && editorManagement && (
-        <EnvEditorModal
-          entries={editorEntries}
-          management={editorManagement}
-          namespace={namespace}
-          secretName={name}
-          contextName={contextName}
-          onClose={() => setShowEditorModal(false)}
-          onRefresh={onRefresh}
+      {showEntryEditor && (
+        <EnvEntryEditorModal
+          mode={entryMode}
+          initialKey={entryInitialKey}
+          initialValue={entryInitialValue}
+          host={management?.host ?? ""}
           termWidth={termWidth}
           termHeight={termHeight}
+          onConfirm={handleEntryConfirm}
+          onCancel={handleEntryCancel}
+        />
+      )}
+
+      {showDeleteKeyModal && (
+        <DeleteKeyModal
+          keyName={deleteKeyTarget}
+          host={management?.host ?? ""}
+          termWidth={termWidth}
+          termHeight={termHeight}
+          onConfirm={handleDeleteConfirm}
+          onCancel={handleDeleteCancel}
         />
       )}
 

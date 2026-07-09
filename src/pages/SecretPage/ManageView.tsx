@@ -2,31 +2,29 @@ import { useCallback, useEffect, useMemo, useRef, useState, forwardRef, useImper
 import { t, fg } from "@opentui/core"
 import { type CommandItem } from "../../components/CommandsBar"
 import { getSecretManagement, unregisterSecret } from "../../utils/secret-registry"
-import { sshTestConnection, sshReadFile } from "../../utils/ssh"
-import { parseDotenv } from "../../utils/dotenv"
+import { sshTestConnection } from "../../utils/ssh"
 import type { ManageState, ConnectionStatus } from "./types"
-import type { SecretManagement, EnvEntry } from "../../types"
+import type { SecretManagement } from "../../types"
 
 export interface ManageViewHandle {
   handleKey: (key: { name: string }) => boolean
 }
 
 interface ManageViewProps {
-  name: string
-  namespace: string
-  rawData: Record<string, string>
-  annotations: Record<string, string>
-  contextName: string
-  spinner: string
-  modalActive: boolean
-  onRefresh: () => void
-  onBack: () => void
-  onFocusLeft: () => void
-  onCommands: (commands: CommandItem[]) => void
-  onToast: (msg: string) => void
-  onShowRegisterModal: () => void
-  onShowEditorModal: (entries: EnvEntry[], management: SecretManagement) => void
-}
+    name: string
+    namespace: string
+    rawData: Record<string, string>
+    annotations: Record<string, string>
+    contextName: string
+    spinner: string
+    modalActive: boolean
+    onRefresh: () => void
+    onBack: () => void
+    onFocusLeft: () => void
+    onCommands: (commands: CommandItem[]) => void
+    onToast: (msg: string) => void
+    onShowRegisterModal: () => void
+  }
 
 export const ManageView = forwardRef<ManageViewHandle, ManageViewProps>(function ManageView({
   name,
@@ -42,7 +40,6 @@ export const ManageView = forwardRef<ManageViewHandle, ManageViewProps>(function
   onCommands,
   onToast,
   onShowRegisterModal,
-  onShowEditorModal,
 }, ref) {
   const [manageState, setManageState] = useState<ManageState>("unregistered")
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>("unknown")
@@ -57,7 +54,7 @@ export const ManageView = forwardRef<ManageViewHandle, ManageViewProps>(function
   useEffect(() => {
     if (manageState === "registered" && management && management.strategy === "dotenv") {
       setConnectionStatus("checking")
-      sshTestConnection(management.host, management.path).then((result) => {
+      sshTestConnection(management.host, management.path).then((result: { connected: boolean }) => {
         setConnectionStatus(result.connected ? "connected" : "failed")
       })
     }
@@ -74,17 +71,6 @@ export const ManageView = forwardRef<ManageViewHandle, ManageViewProps>(function
     setManageState(management ? "registered" : "unregistered")
   }, [contextName, namespace, name, management, onRefresh, onToast])
 
-  const openEditor = useCallback(async () => {
-    if (!management) return
-    try {
-      const content = await sshReadFile(management.host, management.path)
-      const entries = parseDotenv(content)
-      onShowEditorModal(entries, management)
-    } catch {
-      onToast("failed to read .env")
-    }
-  }, [management, onToast, onShowEditorModal])
-
   const commands = useMemo<CommandItem[]>(() => {
     if (modalActive) {
       return [{ key: "", label: "modal active", keyColor: "#8B949E" }]
@@ -98,9 +84,6 @@ export const ManageView = forwardRef<ManageViewHandle, ManageViewProps>(function
     }
     if (manageState === "registered" && management) {
       const cmds: CommandItem[] = []
-      if (management.strategy === "dotenv") {
-        cmds.push({ key: "[e]", label: "edit .env" })
-      }
       cmds.push({ key: "[u]", label: "unregister" })
       cmds.push({ key: "[←]", label: "focus left" })
       cmds.push({ key: "[esc]", label: "back" })
@@ -134,9 +117,7 @@ export const ManageView = forwardRef<ManageViewHandle, ManageViewProps>(function
     }
 
     if (manageState === "registered" && management) {
-      if (key.name === "e" && management.strategy === "dotenv") {
-        openEditor()
-      } else if (key.name === "u") {
+      if (key.name === "u") {
         setManageState("unregister-confirm")
       } else if (key.name === "left") {
         onFocusLeft()
@@ -158,7 +139,7 @@ export const ManageView = forwardRef<ManageViewHandle, ManageViewProps>(function
     return true
   }, [
     manageState, management, modalActive,
-    onFocusLeft, onBack, openEditor, runUnregister, onShowRegisterModal,
+    onFocusLeft, onBack, runUnregister, onShowRegisterModal,
   ])
 
   useImperativeHandle(ref, () => ({ handleKey }), [handleKey])

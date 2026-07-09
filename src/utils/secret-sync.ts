@@ -2,7 +2,7 @@ import type { EnvEntry, SecretManagement, SyncResult } from "../types"
 import { sshWriteFile, sshExec, sshReadFile } from "./ssh"
 import { kubectlApplyYamlAsync } from "./kube/exec"
 import { reannotateSecret } from "./secret-registry"
-import { stringifyDotenv } from "./dotenv"
+import { stringifyDotenv, parseDotenv } from "./dotenv"
 
 function buildSecretYaml(name: string, namespace: string, entries: EnvEntry[]): string {
   const data: Record<string, string> = {}
@@ -78,4 +78,66 @@ export async function syncSecretFromEnv(
   } catch {}
 
   return { success: true, output: "Secret synced" }
+}
+
+export async function saveEnvEntry(
+  management: SecretManagement,
+  contextName: string,
+  namespace: string,
+  secretName: string,
+  mode: "add" | "edit",
+  key: string,
+  value: string,
+  originalKey?: string,
+): Promise<SyncResult> {
+  let content: string
+  try {
+    content = await sshReadFile(management.host, management.path)
+  } catch (err: any) {
+    return { success: false, output: `Failed to read .env: ${err.message || err}` }
+  }
+
+let entries = parseDotenv(content)
+
+  if (mode === "add") {
+    entries.push({ key, value, isComment: false, isBlank: false })
+  } else {
+    const idx = entries.findIndex(e => !e.isComment && !e.isBlank && e.key === (originalKey ?? key))
+    if (idx === -1) {
+      entries.push({ key, value, isComment: false, isBlank: false })
+    } else {
+      const entry = entries[idx]
+      if (entry) {
+        entries[idx] = { key, value, isComment: entry.isComment, isBlank: entry.isBlank }
+      }
+    }
+  }
+
+  return syncSecretFromEnv(entries, management, contextName, namespace, secretName)
+}
+
+export async function deleteEnvEntry(
+  management: SecretManagement,
+  contextName: string,
+  namespace: string,
+  secretName: string,
+  key: string,
+): Promise<SyncResult> {
+  let content: string
+  try {
+    content = await sshReadFile(management.host, management.path)
+  } catch (err: any) {
+    return { success: false, output: `Failed to read .env: ${err.message || err}` }
+  }
+
+  let entries = parseDotenv(content)
+
+  entries = entries.filter(e => {
+    if (e.isComment) return true
+    if (e.isBlank) return true
+    if (e.key === key) return false
+    return true
+  })
+
+  return syncSecretFromEnv(entries, management, contextName, namespace, secretName)
 }

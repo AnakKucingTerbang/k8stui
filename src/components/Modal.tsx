@@ -8,11 +8,12 @@ interface ModalProps {
   height: number
   footer?: ReactNode
   children: ReactNode
+  zIndex?: number
 }
 
 const FOCUSED_BORDER = "#58A6FF"
 
-export function Modal({ title, top, left, width, height, footer, children }: ModalProps) {
+export function Modal({ title, top, left, width, height, footer, children, zIndex }: ModalProps) {
   return (
     <box
       style={{
@@ -22,7 +23,7 @@ export function Modal({ title, top, left, width, height, footer, children }: Mod
         width,
         height,
         flexDirection: "column",
-        zIndex: 100,
+        zIndex: zIndex ?? 100,
         backgroundColor: "#0D1117",
       }}
     >
