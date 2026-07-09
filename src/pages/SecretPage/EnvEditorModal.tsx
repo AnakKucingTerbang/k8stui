@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useKeyboard } from "@opentui/react"
-import { t, fg } from "@opentui/core"
+import { type KeyEvent, t, fg } from "@opentui/core"
 import { Modal } from "../../components/Modal"
 import { CommandsBar, type CommandItem } from "../../components/CommandsBar"
 import { syncSecretFromEnv } from "../../utils/secret-sync"
-import { isPrintable } from "../../utils/keys"
+import { isPrintable, keyCharSequence } from "../../utils/keys"
 import type { EnvEntry, SecretManagement, SyncResult } from "../../types"
 
 const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
@@ -92,7 +92,7 @@ export function EnvEditorModal({
   }, [entries, management, contextName, namespace, secretName, onRefresh])
 
   const handleKey = useCallback(
-    (key: { name: string }) => {
+    (key: KeyEvent) => {
       if (editMode === "saving") return
 
       if (editMode === "confirmDiscard") {
@@ -123,7 +123,7 @@ export function EnvEditorModal({
         } else if (key.name === "delete") {
           setEditValue("")
         } else if (isPrintable(key.name)) {
-          setEditValue((v) => v + key.name)
+          setEditValue((v) => v + keyCharSequence(key))
         }
         return
       }
@@ -139,7 +139,7 @@ export function EnvEditorModal({
         } else if (key.name === "backspace") {
           setAddKey((v) => v.slice(0, -1))
         } else if (isPrintable(key.name)) {
-          setAddKey((v) => v + key.name)
+          setAddKey((v) => v + keyCharSequence(key))
         }
         return
       }
@@ -162,7 +162,7 @@ export function EnvEditorModal({
         } else if (key.name === "backspace") {
           setAddValue((v) => v.slice(0, -1))
         } else if (isPrintable(key.name)) {
-          setAddValue((v) => v + key.name)
+          setAddValue((v) => v + keyCharSequence(key))
         }
         return
       }
@@ -215,7 +215,7 @@ export function EnvEditorModal({
 
   useKeyboard(handleKey)
 
-  const commands = useMemo<CommandItem[]>(() => {
+const commands = useMemo<CommandItem[]>(() => {
     if (editMode === "saving") {
       return [{ key: spinner, label: "Saving...", keyColor: "#D29922" }]
     }
